@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import {
     SvelteFlow,
     Background,
@@ -34,6 +34,9 @@
   import DiagnosticsPanel from './components/DiagnosticsPanel.svelte';
   import SimulatorModal from './components/SimulatorModal.svelte';
   import GrammarModal from './components/GrammarModal.svelte';
+  import AuthButton from './components/AuthButton.svelte';
+  import ClerkConfigModal from './components/ClerkConfigModal.svelte';
+  import { auth } from './lib/auth/clerk.svelte';
 
   import { generateVxml } from './lib/vxml/generator';
   import { parseVxml } from './lib/vxml/parser';
@@ -63,6 +66,11 @@
   let showGrammarModal = $state(false);
   let grammarModalXml = $state('');
   let grammarSaveHandler = $state<((xml: string) => void) | null>(null);
+  let showClerkModal = $state(false);
+
+  onMount(() => {
+    auth.init();
+  });
 
   function handleOpenGrammarStudio(initialXml: string = '', onSaveCallback?: (xml: string) => void) {
     grammarModalXml = initialXml;
@@ -647,6 +655,11 @@
       >
         <Sliders class="w-4 h-4 text-slate-400" />
       </button>
+
+      <div class="h-5 w-px bg-slate-800 mx-1"></div>
+
+      <!-- Clerk Authentication -->
+      <AuthButton onOpenConfigModal={() => (showClerkModal = true)} />
     </div>
   </header>
 
@@ -753,5 +766,10 @@
       showToast('Grammar applied.');
     }}
     onClose={() => (showGrammarModal = false)}
+  />
+
+  <ClerkConfigModal
+    isOpen={showClerkModal}
+    onClose={() => (showClerkModal = false)}
   />
 </div>
