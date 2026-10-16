@@ -1,5 +1,7 @@
 # VoiceXML 2.1 Visual Flow Editor
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+
 A modern, node-based interactive **VoiceXML (VXML) 2.1** visual editor built with **Svelte 5**, **Svelte Flow** (`@xyflow/svelte`), **Tailwind CSS**, and **TypeScript**.
 
 Compliant with the **W3C Voice Extensible Markup Language (VoiceXML) Version 2.1 Recommendation**.
@@ -80,3 +82,9 @@ npm run build
 ```bash
 npx tsx tests/test-vxml.ts
 ```
+
+---
+
+## 📄 License
+
+This project is licensed under the terms of the [GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](LICENSE).

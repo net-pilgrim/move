@@ -510,6 +510,9 @@
           <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-700/50 flex items-center gap-1 font-semibold">
             <Sparkles class="w-3 h-3 text-amber-300" /> VXML 2.1
           </span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-mono" title="Licensed under GNU AGPLv3">
+            AGPL-3.0
+          </span>
         </div>
         <p class="text-[10px] text-slate-400">W3C Compliant Interactive Voice Flow Studio</p>
       </div>
