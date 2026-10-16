@@ -37,8 +37,6 @@
   import AuthButton from './components/AuthButton.svelte';
   import ClerkConfigModal from './components/ClerkConfigModal.svelte';
   import LoginGate from './components/LoginGate.svelte';
-  import ThemeSelector from './components/ThemeSelector.svelte';
-  import { theme } from './lib/theme/theme.svelte';
   import { auth } from './lib/auth/clerk.svelte';
 
   import { generateVxml } from './lib/vxml/generator';
@@ -72,7 +70,6 @@
   let showClerkModal = $state(false);
 
   onMount(() => {
-    theme.init();
     auth.init();
   });
 
@@ -681,11 +678,6 @@
 
       <div class="h-5 w-px bg-slate-800 mx-1"></div>
 
-      <!-- Theme Selector (Pico CSS) -->
-      <ThemeSelector />
-
-      <div class="h-5 w-px bg-slate-800 mx-1"></div>
-
       <!-- Clerk Authentication -->
       <AuthButton onOpenConfigModal={() => (showClerkModal = true)} />
     </div>
@@ -716,7 +708,7 @@
         onpaneclick={handlePaneClick}
         fitView
       >
-        <Background gap={18} size={1.2} patternColor="var(--app-border-strong)" />
+        <Background gap={18} size={1.2} patternColor="#334155" />
         <Controls class="!bg-slate-900 !border-slate-800 !text-slate-300" />
       </SvelteFlow>
 
