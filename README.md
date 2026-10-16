@@ -83,6 +83,17 @@ npm run build
 npx tsx tests/test-vxml.ts
 ```
 
+### 5. Deploy to Vercel
+
+Deploy directly to Vercel using the official one-click button:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fnet-pilgrim%2Fmove)
+
+Or deploy via the command line:
+```bash
+npx vercel
+```
+
 ---
 
 ## 📄 License
