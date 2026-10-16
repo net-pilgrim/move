@@ -1,4 +1,5 @@
 import { Clerk } from '@clerk/clerk-js';
+import { loadClerkUIScript } from '@clerk/shared/loadClerkJsScript';
 
 export interface UserProfile {
   id: string;
@@ -29,8 +30,11 @@ class AuthService {
 
     try {
       this.isConfigured = true;
+      // Load UI bundle to enable modal components (openSignIn, mountUserButton, etc.)
+      await loadClerkUIScript({ publishableKey: pubKey });
       this.clerkInstance = new Clerk(pubKey);
       await this.clerkInstance.load({
+        clerkUICtor: (window as any).__internal_ClerkUICtor,
         appearance: {
           variables: {
             colorPrimary: '#6366f1',
@@ -41,7 +45,7 @@ class AuthService {
             colorInputText: '#f8fafc'
           }
         }
-      });
+      } as any);
 
       this.clerkInstance.addListener(({ user, session }) => {
         this.updateState(user, Boolean(session));
