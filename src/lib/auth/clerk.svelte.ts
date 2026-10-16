@@ -96,6 +96,24 @@ class AuthService {
     }
   }
 
+  mountSignIn(node: HTMLDivElement) {
+    if (this.clerkInstance && this.isConfigured) {
+      this.clerkInstance.mountSignIn(node);
+    }
+
+    return {
+      destroy: () => {
+        if (this.clerkInstance) {
+          try {
+            this.clerkInstance.unmountSignIn(node);
+          } catch {
+            // ignore unmount errors on teardown
+          }
+        }
+      }
+    };
+  }
+
   mountUserButton(node: HTMLDivElement) {
     if (this.clerkInstance && this.isSignedIn) {
       this.clerkInstance.mountUserButton(node);
