@@ -5,6 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>vxml-editor</title>
+    <script>
+      (function () {
+        try {
+          var savedMode = localStorage.getItem('vxml_theme_mode') || 'dark';
+          var savedColor = localStorage.getItem('vxml_theme_color') || 'indigo';
+          var effectiveMode = savedMode;
+          if (savedMode === 'auto') {
+            effectiveMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', effectiveMode);
+          document.documentElement.setAttribute('data-pico-color', savedColor);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

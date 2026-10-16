@@ -2,7 +2,7 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-A modern, node-based interactive **VoiceXML (VXML) 2.1** visual editor built with **Svelte 5**, **Svelte Flow** (`@xyflow/svelte`), **Tailwind CSS**, and **TypeScript**.
+A modern, node-based interactive **VoiceXML (VXML) 2.1** visual editor built with **Svelte 5**, **Svelte Flow** (`@xyflow/svelte`), **Pico CSS** (`@picocss/pico`), and **TypeScript**.
 
 Compliant with the **W3C Voice Extensible Markup Language (VoiceXML) Version 2.1 Recommendation**.
 
@@ -58,6 +58,12 @@ Compliant with the **W3C Voice Extensible Markup Language (VoiceXML) Version 2.1
   1. *Customer Support Router* (Classic menu, DTMF options, transfer to agent)
   2. *VXML 2.1 Data Fetch Flow* (PIN collection, `<data>` fetch, condition branch)
   3. *Voicemail System* (Record audio, review/confirm, hangup)
+
+- **Pico CSS Design & Theme Customization**:
+  - Clean, accessible design powered entirely by **Pico CSS v2** with zero Tailwind dependencies.
+  - Dynamic Theme Selector supporting **Dark**, **Light**, and **System/Auto** modes.
+  - 10 Pico color palettes: Indigo, Slate, Azure, Cyan, Jade, Pumpkin, Amber, Violet, Red, and Zinc.
+  - Persistent user preferences saved in `localStorage` with FOUC prevention.
 
 ---
 

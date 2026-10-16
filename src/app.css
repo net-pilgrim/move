@@ -1,33 +1,642 @@
-@import "tailwindcss";
+/* ==========================================================================
+   Pico CSS - Semantic Design System & Multi-Theme Architecture
+   ========================================================================== */
+
+@import "@picocss/pico/css/pico.min.css";
+@import "@picocss/pico/css/pico.colors.min.css";
 @import "@xyflow/svelte/dist/style.css";
 
+/* --------------------------------------------------------------------------
+   Root & Theme Variables
+   -------------------------------------------------------------------------- */
+
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--pico-font-family-sans-serif);
   color-scheme: light dark;
 }
 
+/* Base Body Setup */
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
   height: 100vh;
   width: 100vw;
-  background-color: #0f172a;
-  color: #f8fafc;
+  background-color: var(--pico-background-color);
+  color: var(--pico-color);
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Custom scrollbars */
+/* --------------------------------------------------------------------------
+   Pico Color Palettes
+   -------------------------------------------------------------------------- */
+
+/* Indigo (Default) */
+[data-pico-color="indigo"][data-theme="light"], [data-pico-color="indigo"] [data-theme="light"] {
+  --pico-primary: #655cd6;
+  --pico-primary-background: #524ed2;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #4040bf;
+  --pico-primary-hover-background: #4040bf;
+  --pico-primary-focus: rgba(148, 134, 225, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="indigo"][data-theme="dark"], [data-pico-color="indigo"] [data-theme="dark"], [data-pico-color="indigo"]:not([data-theme]) {
+  --pico-primary: #a294e5;
+  --pico-primary-background: #524ed2;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #bdb2ec;
+  --pico-primary-hover-background: #a294e5;
+  --pico-primary-focus: rgba(162, 148, 229, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Slate */
+[data-pico-color="slate"][data-theme="light"], [data-pico-color="slate"] [data-theme="light"] {
+  --pico-primary: #5d6b89;
+  --pico-primary-background: #525f7a;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #48536b;
+  --pico-primary-hover-background: #48536b;
+  --pico-primary-focus: rgba(129, 145, 181, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="slate"][data-theme="dark"], [data-pico-color="slate"] [data-theme="dark"], [data-pico-color="slate"]:not([data-theme]) {
+  --pico-primary: #909ebe;
+  --pico-primary-background: #525f7a;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #b0b9d0;
+  --pico-primary-hover-background: #909ebe;
+  --pico-primary-focus: rgba(144, 158, 190, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Azure / Blue */
+[data-pico-color="blue"][data-theme="light"], [data-pico-color="blue"] [data-theme="light"] {
+  --pico-primary: #2060df;
+  --pico-primary-background: #1b55cc;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #1646a8;
+  --pico-primary-hover-background: #1646a8;
+  --pico-primary-focus: rgba(32, 96, 223, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="blue"][data-theme="dark"], [data-pico-color="blue"] [data-theme="dark"], [data-pico-color="blue"]:not([data-theme]) {
+  --pico-primary: #8999f9;
+  --pico-primary-background: #1b55cc;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #aab7fc;
+  --pico-primary-hover-background: #8999f9;
+  --pico-primary-focus: rgba(137, 153, 249, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Jade / Green */
+[data-pico-color="jade"][data-theme="light"], [data-pico-color="jade"] [data-theme="light"] {
+  --pico-primary: #007a50;
+  --pico-primary-background: #006c47;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #005638;
+  --pico-primary-hover-background: #005638;
+  --pico-primary-focus: rgba(0, 122, 80, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="jade"][data-theme="dark"], [data-pico-color="jade"] [data-theme="dark"], [data-pico-color="jade"]:not([data-theme]) {
+  --pico-primary: #00b478;
+  --pico-primary-background: #006c47;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #29cca0;
+  --pico-primary-hover-background: #00b478;
+  --pico-primary-focus: rgba(0, 180, 120, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Pumpkin / Orange */
+[data-pico-color="pumpkin"][data-theme="light"], [data-pico-color="pumpkin"] [data-theme="light"] {
+  --pico-primary: #9c5900;
+  --pico-primary-background: #8a4f00;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #754200;
+  --pico-primary-hover-background: #754200;
+  --pico-primary-focus: rgba(156, 89, 0, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="pumpkin"][data-theme="dark"], [data-pico-color="pumpkin"] [data-theme="dark"], [data-pico-color="pumpkin"]:not([data-theme]) {
+  --pico-primary: #e48500;
+  --pico-primary-background: #8a4f00;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #f99d1b;
+  --pico-primary-hover-background: #e48500;
+  --pico-primary-focus: rgba(228, 133, 0, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Amber */
+[data-pico-color="amber"][data-theme="light"], [data-pico-color="amber"] [data-theme="light"] {
+  --pico-primary: #876400;
+  --pico-primary-background: #7a5a00;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #694d00;
+  --pico-primary-hover-background: #694d00;
+  --pico-primary-focus: rgba(135, 100, 0, 0.5);
+  --pico-primary-inverse: #000;
+}
+[data-pico-color="amber"][data-theme="dark"], [data-pico-color="amber"] [data-theme="dark"], [data-pico-color="amber"]:not([data-theme]) {
+  --pico-primary: #c79400;
+  --pico-primary-background: #ffbf00;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #e8ae01;
+  --pico-primary-hover-background: #c79400;
+  --pico-primary-focus: rgba(199, 148, 0, 0.375);
+  --pico-primary-inverse: #000;
+}
+
+/* Violet */
+[data-pico-color="violet"][data-theme="light"], [data-pico-color="violet"] [data-theme="light"] {
+  --pico-primary: #8352c5;
+  --pico-primary-background: #7540bf;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #6935b3;
+  --pico-primary-hover-background: #6935b3;
+  --pico-primary-focus: rgba(131, 82, 197, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="violet"][data-theme="dark"], [data-pico-color="violet"] [data-theme="dark"], [data-pico-color="violet"]:not([data-theme]) {
+  --pico-primary: #b290d9;
+  --pico-primary-background: #7540bf;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #c7aee3;
+  --pico-primary-hover-background: #b290d9;
+  --pico-primary-focus: rgba(178, 144, 217, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Cyan */
+[data-pico-color="cyan"][data-theme="light"], [data-pico-color="cyan"] [data-theme="light"] {
+  --pico-primary: #047878;
+  --pico-primary-background: #036868;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #025050;
+  --pico-primary-hover-background: #025050;
+  --pico-primary-focus: rgba(4, 120, 120, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="cyan"][data-theme="dark"], [data-pico-color="cyan"] [data-theme="dark"], [data-pico-color="cyan"]:not([data-theme]) {
+  --pico-primary: #0ab1b1;
+  --pico-primary-background: #036868;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #38c5c5;
+  --pico-primary-hover-background: #0ab1b1;
+  --pico-primary-focus: rgba(10, 177, 177, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Red */
+[data-pico-color="red"][data-theme="light"], [data-pico-color="red"] [data-theme="light"] {
+  --pico-primary: #c52f21;
+  --pico-primary-background: #c52f21;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #9b2318;
+  --pico-primary-hover-background: #af291d;
+  --pico-primary-focus: rgba(197, 47, 33, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="red"][data-theme="dark"], [data-pico-color="red"] [data-theme="dark"], [data-pico-color="red"]:not([data-theme]) {
+  --pico-primary: #f17961;
+  --pico-primary-background: #c52f21;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #f5a390;
+  --pico-primary-hover-background: #f17961;
+  --pico-primary-focus: rgba(241, 121, 97, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* Zinc */
+[data-pico-color="zinc"][data-theme="light"], [data-pico-color="zinc"] [data-theme="light"] {
+  --pico-primary: #646b79;
+  --pico-primary-background: #646b79;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #4d535e;
+  --pico-primary-hover-background: #5c6370;
+  --pico-primary-focus: rgba(100, 107, 121, 0.5);
+  --pico-primary-inverse: #fff;
+}
+[data-pico-color="zinc"][data-theme="dark"], [data-pico-color="zinc"] [data-theme="dark"], [data-pico-color="zinc"]:not([data-theme]) {
+  --pico-primary: #969eaf;
+  --pico-primary-background: #525f7a;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #b3b9c5;
+  --pico-primary-hover-background: #969eaf;
+  --pico-primary-focus: rgba(150, 158, 175, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   Light/Dark Palette Overrides for Theme Adaptability
+   -------------------------------------------------------------------------- */
+
+[data-theme="light"] {
+  --app-bg-deep: #f8fafc;
+  --app-surface: #ffffff;
+  --app-surface-hover: #f1f5f9;
+  --app-border: #e2e8f0;
+  --app-border-strong: #cbd5e1;
+  --app-text: #0f172a;
+  --app-text-muted: #64748b;
+  --app-text-faint: #94a3b8;
+  --app-header-bg: rgba(255, 255, 255, 0.95);
+  --app-modal-overlay: rgba(15, 23, 42, 0.4);
+}
+
+[data-theme="dark"] {
+  --app-bg-deep: var(--pico-background-color);
+  --app-surface: var(--pico-card-background-color);
+  --app-surface-hover: var(--pico-form-element-background-color);
+  --app-border: var(--pico-muted-border-color);
+  --app-border-strong: var(--pico-border-color);
+  --app-text: var(--pico-color);
+  --app-text-muted: var(--pico-muted-color);
+  --app-text-faint: rgba(148, 163, 184, 0.6);
+  --app-header-bg: rgba(19, 23, 31, 0.95);
+  --app-modal-overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* --------------------------------------------------------------------------
+   Layout & Utility System (Native Pico Mapping)
+   -------------------------------------------------------------------------- */
+
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.flex-1 { flex: 1 1 0%; }
+.shrink-0 { flex-shrink: 0; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.justify-end { justify-content: flex-end; }
+.justify-start { justify-content: flex-start; }
+
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.gap-0\.5 { gap: 0.125rem; }
+.gap-1 { gap: 0.25rem; }
+.gap-1\.5 { gap: 0.375rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-2\.5 { gap: 0.625rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+
+.space-y-1 > * + * { margin-top: 0.25rem; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-2\.5 > * + * { margin-top: 0.625rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.space-y-4 > * + * { margin-top: 1rem; }
+.space-y-6 > * + * { margin-top: 1.5rem; }
+
+.w-full { width: 100%; }
+.w-screen { width: 100vw; }
+.w-auto { width: auto; }
+.w-fit { width: fit-content; }
+.w-3 { width: 0.75rem; }
+.w-3\.5 { width: 0.875rem; }
+.w-4 { width: 1rem; }
+.w-5 { width: 1.25rem; }
+.w-6 { width: 1.5rem; }
+.w-7 { width: 1.75rem; }
+.w-8 { width: 2rem; }
+.w-44 { width: 11rem; }
+.w-48 { width: 12rem; }
+.w-72 { width: 18rem; }
+.w-80 { width: 20rem; }
+.w-96 { width: 24rem; }
+
+.h-full { height: 100%; }
+.h-screen { height: 100vh; }
+.h-auto { height: auto; }
+.h-px { height: 1px; }
+.h-1\.5 { height: 0.375rem; }
+.h-3 { height: 0.75rem; }
+.h-3\.5 { height: 0.875rem; }
+.h-4 { height: 1rem; }
+.h-5 { height: 1.25rem; }
+.h-6 { height: 1.5rem; }
+.h-7 { height: 1.75rem; }
+.h-8 { height: 2rem; }
+.h-14 { height: 3.5rem; }
+.min-h-screen { min-height: 100vh; }
+.max-h-\[90vh\] { max-height: 90vh; }
+.max-h-\[85vh\] { max-height: 85vh; }
+.max-h-\[75vh\] { max-height: 75vh; }
+.max-w-md { max-width: 28rem; }
+.max-w-lg { max-width: 32rem; }
+.max-w-2xl { max-width: 42rem; }
+.max-w-3xl { max-width: 48rem; }
+.max-w-4xl { max-width: 56rem; }
+.max-w-5xl { max-width: 64rem; }
+
+.p-0 { padding: 0; }
+.p-1 { padding: 0.25rem; }
+.p-1\.5 { padding: 0.375rem; }
+.p-2 { padding: 0.5rem; }
+.p-2\.5 { padding: 0.625rem; }
+.p-3 { padding: 0.75rem; }
+.p-3\.5 { padding: 0.875rem; }
+.p-4 { padding: 1rem; }
+.p-5 { padding: 1.25rem; }
+.p-6 { padding: 1.5rem; }
+
+.px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+.px-1\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
+
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-3\.5 { padding-top: 0.875rem; padding-bottom: 0.875rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+
+.m-0 { margin: 0; }
+.mx-1 { margin-left: 0.25rem; margin-right: 0.25rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.mt-0\.5 { margin-top: 0.125rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-4 { margin-bottom: 1rem; }
+
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+.inset-0 { inset: 0; }
+.top-0 { top: 0; }
+.right-0 { right: 0; }
+.bottom-0 { bottom: 0; }
+.left-0 { left: 0; }
+
+.z-10 { z-index: 10; }
+.z-20 { z-index: 20; }
+.z-30 { z-index: 30; }
+.z-40 { z-index: 40; }
+.z-50 { z-index: 50; }
+
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.overflow-x-auto { overflow-x: auto; }
+
+.rounded { border-radius: 0.25rem; }
+.rounded-md { border-radius: 0.375rem; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.rounded-2xl { border-radius: 1rem; }
+.rounded-full { border-radius: 9999px; }
+
+.border { border: 1px solid var(--app-border); }
+.border-2 { border: 2px solid var(--app-border); }
+.border-t { border-top: 1px solid var(--app-border); }
+.border-b { border-bottom: 1px solid var(--app-border); }
+.border-l { border-left: 1px solid var(--app-border); }
+.border-r { border-right: 1px solid var(--app-border); }
+.border-dashed { border-style: dashed; }
+
+.shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+.shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+.shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+.shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+.text-\[8px\] { font-size: 8px; }
+.text-\[9px\] { font-size: 9px; }
+.text-\[10px\] { font-size: 10px; }
+.text-\[11px\] { font-size: 11px; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+
+.font-mono { font-family: var(--pico-font-family-monospace); }
+.font-sans { font-family: var(--pico-font-family-sans-serif); }
+.font-normal { font-weight: 400; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+.uppercase { text-transform: uppercase; }
+.tracking-wider { letter-spacing: 0.05em; }
+.tracking-tight { letter-spacing: -0.025em; }
+.italic { font-style: italic; }
+.leading-relaxed { line-height: 1.625; }
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cursor-pointer { cursor: pointer; }
+.cursor-grab { cursor: grab; }
+.select-none { user-select: none; }
+.hidden { display: none !important; }
+.block { display: block; }
+.backdrop-blur-sm { backdrop-filter: blur(4px); }
+.backdrop-blur { backdrop-filter: blur(8px); }
+
+/* --------------------------------------------------------------------------
+   Pico Semantic Background & Foreground Mappings
+   -------------------------------------------------------------------------- */
+
+.bg-slate-950 { background-color: var(--app-bg-deep); }
+.bg-slate-900 { background-color: var(--app-surface); }
+.bg-slate-800 { background-color: var(--app-surface-hover); }
+.bg-slate-700 { background-color: var(--app-border-strong); }
+
+.border-slate-800 { border-color: var(--app-border); }
+.border-slate-700 { border-color: var(--app-border-strong); }
+.border-slate-600 { border-color: var(--app-border-strong); }
+
+.text-white { color: var(--app-text); }
+.text-slate-100 { color: var(--app-text); }
+.text-slate-200 { color: var(--app-text); }
+.text-slate-300 { color: var(--app-text-muted); }
+.text-slate-400 { color: var(--app-text-muted); }
+.text-slate-500 { color: var(--app-text-faint); }
+
+/* Primary Button / Accents mapped to active Pico Color */
+.bg-indigo-600,
+.bg-indigo-500 {
+  background-color: var(--pico-primary-background) !important;
+  color: var(--pico-primary-inverse) !important;
+  border-color: var(--pico-primary-border) !important;
+}
+
+.hover\:bg-indigo-500:hover,
+.hover\:bg-indigo-600:hover {
+  background-color: var(--pico-primary-hover-background) !important;
+  border-color: var(--pico-primary-hover-border) !important;
+}
+
+.text-indigo-400,
+.text-indigo-300,
+.text-indigo-200 {
+  color: var(--pico-primary) !important;
+}
+
+.border-indigo-500,
+.border-indigo-400 {
+  border-color: var(--pico-primary) !important;
+}
+
+.bg-indigo-500\/10,
+.bg-indigo-500\/20,
+.bg-indigo-950,
+.bg-indigo-950\/30,
+.bg-indigo-950\/70 {
+  background-color: var(--pico-primary-focus) !important;
+}
+
+/* Secondary Actions / Status colors */
+.bg-emerald-600,
+.bg-emerald-500 {
+  background-color: #059669 !important;
+  color: #fff !important;
+}
+.hover\:bg-emerald-500:hover { background-color: #10b981 !important; }
+.text-emerald-400,
+.text-emerald-300 { color: #10b981 !important; }
+.border-emerald-800,
+.border-emerald-400 { border-color: #059669 !important; }
+.bg-emerald-950\/40 { background-color: rgba(5, 150, 105, 0.15) !important; }
+
+.bg-rose-600,
+.bg-rose-500 { background-color: #e11d48 !important; color: #fff !important; }
+.text-rose-400,
+.text-rose-300,
+.text-rose-200 { color: #f43f5e !important; }
+.border-rose-800 { border-color: #e11d48 !important; }
+.bg-rose-950\/40,
+.bg-rose-900\/60 { background-color: rgba(225, 29, 72, 0.15) !important; }
+
+.text-amber-400,
+.text-amber-300 { color: #f59e0b !important; }
+.border-amber-800 { border-color: #d97706 !important; }
+.bg-amber-950\/40 { background-color: rgba(217, 119, 6, 0.15) !important; }
+
+.text-purple-400,
+.text-purple-300 { color: #c084fc !important; }
+.border-purple-700,
+.border-purple-800\/40 { border-color: #9333ea !important; }
+.bg-purple-950 { background-color: rgba(147, 51, 234, 0.15) !important; }
+
+.text-cyan-400,
+.text-cyan-300 { color: #22d3ee !important; }
+.border-cyan-800\/40 { border-color: #0891b2 !important; }
+
+/* --------------------------------------------------------------------------
+   Native HTML Form Elements & Buttons (Pico Reset)
+   -------------------------------------------------------------------------- */
+
+input[type="text"],
+input[type="search"],
+select,
+textarea {
+  background-color: var(--app-surface) !important;
+  color: var(--app-text) !important;
+  border: 1px solid var(--app-border-strong) !important;
+  border-radius: var(--pico-border-radius) !important;
+  font-family: inherit;
+  margin-bottom: 0 !important;
+}
+
+input[type="text"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--pico-primary) !important;
+  box-shadow: 0 0 0 1px var(--pico-primary) !important;
+  outline: none !important;
+}
+
+button {
+  margin-bottom: 0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Svelte Flow Canvas Adaptation to Pico CSS
+   -------------------------------------------------------------------------- */
+
+.svelte-flow {
+  background-color: var(--app-bg-deep) !important;
+}
+
+.svelte-flow__controls {
+  background: var(--app-surface) !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--pico-border-radius) !important;
+  box-shadow: var(--pico-box-shadow) !important;
+  overflow: hidden;
+}
+
+.svelte-flow__controls-button {
+  background: var(--app-surface) !important;
+  border-bottom: 1px solid var(--app-border) !important;
+  color: var(--app-text-muted) !important;
+  fill: var(--app-text-muted) !important;
+}
+
+.svelte-flow__controls-button:hover {
+  background: var(--app-surface-hover) !important;
+  color: var(--pico-primary) !important;
+  fill: var(--pico-primary) !important;
+}
+
+.svelte-flow__minimap {
+  background: var(--app-surface) !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--pico-border-radius) !important;
+  box-shadow: var(--pico-box-shadow) !important;
+}
+
+.svelte-flow__edge-path {
+  stroke: var(--pico-primary) !important;
+  stroke-width: 2 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Custom Scrollbars
+   -------------------------------------------------------------------------- */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.5);
+  background: var(--app-border-strong);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.8);
+  background: var(--app-text-muted);
 }

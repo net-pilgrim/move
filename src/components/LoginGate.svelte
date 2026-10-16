@@ -1,11 +1,17 @@
 <script lang="ts">
   import { Phone, Lock, Sparkles, Shield, Key, AlertCircle } from '@lucide/svelte';
   import { auth } from '../lib/auth/clerk.svelte';
+  import ThemeSelector from './ThemeSelector.svelte';
 
   let { onOpenConfigModal }: { onOpenConfigModal: () => void } = $props();
 </script>
 
 <div class="min-h-screen w-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden select-none font-sans text-slate-100">
+  <!-- Top Right Theme Switcher -->
+  <div class="absolute top-4 right-4 z-20">
+    <ThemeSelector />
+  </div>
+
   <!-- Subtle decorative ambient background glows -->
   <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none"></div>
   <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none"></div>
