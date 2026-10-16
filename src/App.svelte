@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import {
     SvelteFlow,
     Background,
@@ -34,6 +34,10 @@
   import DiagnosticsPanel from './components/DiagnosticsPanel.svelte';
   import SimulatorModal from './components/SimulatorModal.svelte';
   import GrammarModal from './components/GrammarModal.svelte';
+  import AuthButton from './components/AuthButton.svelte';
+  import ClerkConfigModal from './components/ClerkConfigModal.svelte';
+  import LoginGate from './components/LoginGate.svelte';
+  import { auth } from './lib/auth/clerk.svelte';
 
   import { generateVxml } from './lib/vxml/generator';
   import { parseVxml } from './lib/vxml/parser';
@@ -63,6 +67,11 @@
   let showGrammarModal = $state(false);
   let grammarModalXml = $state('');
   let grammarSaveHandler = $state<((xml: string) => void) | null>(null);
+  let showClerkModal = $state(false);
+
+  onMount(() => {
+    auth.init();
+  });
 
   function handleOpenGrammarStudio(initialXml: string = '', onSaveCallback?: (xml: string) => void) {
     grammarModalXml = initialXml;
@@ -486,16 +495,35 @@
   }
 </script>
 
-<!-- Hidden File Input for 1-Click VXML / Project Import -->
-<input
-  bind:this={fileInputRef}
-  type="file"
-  accept=".vxml,.xml,.json"
-  onchange={handleFileSelected}
-  class="hidden"
-/>
+{#if !auth.isLoaded}
+  <!-- Splash Loading Screen while verifying session -->
+  <div class="w-screen h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans">
+    <div class="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-xl shadow-indigo-950/60 mb-4 animate-pulse">
+      <Phone class="w-8 h-8" />
+    </div>
+    <div class="flex items-center gap-2.5 text-slate-400 text-xs font-medium">
+      <div class="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      <span>Initializing VoiceXML 2.1 Studio...</span>
+    </div>
+  </div>
+{:else if !auth.isSignedIn}
+  <!-- Login Gate Guard: Entire app is locked until authentication -->
+  <LoginGate onOpenConfigModal={() => (showClerkModal = true)} />
+  <ClerkConfigModal
+    isOpen={showClerkModal}
+    onClose={() => (showClerkModal = false)}
+  />
+{:else}
+  <!-- Hidden File Input for 1-Click VXML / Project Import -->
+  <input
+    bind:this={fileInputRef}
+    type="file"
+    accept=".vxml,.xml,.json"
+    onchange={handleFileSelected}
+    class="hidden"
+  />
 
-<div class="w-screen h-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans select-none">
+  <div class="w-screen h-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans select-none">
   <!-- Top Navigation & Control Header -->
   <header class="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 z-30 shadow-md">
     <!-- Left: Branding & Tag -->
@@ -647,6 +675,11 @@
       >
         <Sliders class="w-4 h-4 text-slate-400" />
       </button>
+
+      <div class="h-5 w-px bg-slate-800 mx-1"></div>
+
+      <!-- Clerk Authentication -->
+      <AuthButton onOpenConfigModal={() => (showClerkModal = true)} />
     </div>
   </header>
 
@@ -754,4 +787,10 @@
     }}
     onClose={() => (showGrammarModal = false)}
   />
+
+  <ClerkConfigModal
+    isOpen={showClerkModal}
+    onClose={() => (showClerkModal = false)}
+  />
 </div>
+{/if}
