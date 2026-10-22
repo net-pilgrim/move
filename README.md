@@ -1,4 +1,4 @@
-# VoiceXML 2.1 Visual Flow Editor
+# MOVE - My Own VXML Editor
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
