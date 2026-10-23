@@ -221,3 +221,50 @@
   height: 10px !important;
   border-radius: var(--radius-full) !important;
 }
+
+/* Simulator Modal & Floating Docked Widget */
+.simulator-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background-color: rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.simulator-expanded {
+  width: 100%;
+  max-width: 56rem;
+  max-height: 90vh;
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--slate-700);
+  background-color: var(--slate-900);
+  box-shadow: var(--shadow-2xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.simulator-docked {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  width: 410px;
+  max-width: calc(100vw - 2.5rem);
+  max-height: 88vh;
+  z-index: 50;
+  border-radius: var(--radius-2xl);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  background-color: var(--slate-900);
+  box-shadow: 0 12px 45px rgba(0, 0, 0, 0.85), 0 0 0 2px rgba(16, 185, 129, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+}
