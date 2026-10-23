@@ -141,4 +141,17 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
   --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
+
+  /* XYFlow Custom Theme Variables */
+  --xy-edge-stroke: #64748b;
+  --xy-edge-stroke-width: 2;
+  --xy-edge-stroke-selected: #818cf8;
+  --xy-edge-label-background-color: #0f172a;
+  --xy-edge-label-color: #f1f5f9;
+  --xy-controls-button-background-color: #0f172a;
+  --xy-controls-button-background-color-hover: #1e293b;
+  --xy-controls-button-color: #cbd5e1;
+  --xy-controls-button-color-hover: #38bdf8;
+  --xy-controls-button-border-color: #334155;
+  --xy-controls-box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }

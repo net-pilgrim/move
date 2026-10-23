@@ -717,9 +717,10 @@
         onnodeclick={handleNodeClick}
         onpaneclick={handlePaneClick}
         fitView
+        colorMode="dark"
       >
         <Background gap={18} size={1.2} patternColor="#334155" />
-        <Controls class="!bg-slate-900 !border-slate-800 !text-slate-300" />
+        <Controls />
       </SvelteFlow>
 
       <!-- Toast Notification Alert -->

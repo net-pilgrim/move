@@ -212,14 +212,177 @@
 .animate-spin { animation: spin 1s linear infinite; }
 .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
 
-/* XYFlow Custom Canvas Tweaks */
+/* ==========================================================================
+   XYFlow Canvas: Nodes, Handles, Edges & Controls
+   ========================================================================== */
 .svelte-flow__node {
   border-radius: var(--radius-xl);
 }
+
 .svelte-flow__handle {
   width: 10px !important;
   height: 10px !important;
   border-radius: var(--radius-full) !important;
+}
+
+/* Edge Lines & Connectors */
+.svelte-flow__edge-path {
+  stroke: #64748b !important; /* slate-500: clearly visible high contrast against dark canvas */
+  stroke-width: 2px !important;
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+.svelte-flow__edge:hover .svelte-flow__edge-path {
+  stroke: #818cf8 !important; /* indigo-400 */
+  stroke-width: 2.5px !important;
+}
+
+.svelte-flow__edge.selected .svelte-flow__edge-path {
+  stroke: #6366f1 !important; /* indigo-500 */
+  stroke-width: 2.5px !important;
+}
+
+/* Arrowheads */
+.svelte-flow__arrowhead polyline {
+  stroke: #64748b !important;
+  stroke-width: 1.5;
+}
+
+.svelte-flow__arrowhead polyline.arrowclosed {
+  fill: #64748b !important;
+}
+
+.svelte-flow__edge:hover .svelte-flow__arrowhead polyline,
+.svelte-flow__edge.selected .svelte-flow__arrowhead polyline {
+  stroke: #818cf8 !important;
+}
+
+.svelte-flow__edge:hover .svelte-flow__arrowhead polyline.arrowclosed,
+.svelte-flow__edge.selected .svelte-flow__arrowhead polyline.arrowclosed {
+  fill: #818cf8 !important;
+}
+
+/* Edge Link Labels (HTML Badges) */
+.svelte-flow__edge-label {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  font-family: var(--font-sans) !important;
+  color: var(--slate-100) !important;
+  background-color: rgba(15, 23, 42, 0.94) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease !important;
+  z-index: 10;
+}
+
+.svelte-flow__edge-label:hover {
+  background-color: var(--slate-800) !important;
+  border-color: var(--indigo-400) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35), 0 4px 14px rgba(0, 0, 0, 0.7) !important;
+}
+
+.svelte-flow__edge.selected .svelte-flow__edge-label {
+  background-color: rgba(30, 27, 75, 0.98) !important;
+  border-color: var(--indigo-400) !important;
+  color: var(--indigo-100) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5), 0 4px 14px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* SVG Edge Text Fallback */
+.svelte-flow__edge-text {
+  fill: var(--slate-100) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  font-family: var(--font-sans) !important;
+}
+
+.svelte-flow__edge-textwrapper rect {
+  fill: rgba(15, 23, 42, 0.94) !important;
+  stroke: rgba(148, 163, 184, 0.35) !important;
+  rx: 4px;
+  ry: 4px;
+}
+
+/* Canvas Zoom Controls Toolbar */
+.svelte-flow__controls {
+  display: flex !important;
+  flex-direction: column !important;
+  background-color: var(--slate-900) !important;
+  border: 1px solid var(--slate-700) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  overflow: hidden;
+  padding: 3px !important;
+  gap: 2px;
+  z-index: 20;
+}
+
+.svelte-flow__controls.horizontal {
+  flex-direction: row !important;
+}
+
+.svelte-flow__controls-button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 6px !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6) !important;
+  border-radius: var(--radius-lg) !important;
+  background-color: transparent !important;
+  color: var(--slate-300) !important;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.svelte-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.svelte-flow__controls.horizontal .svelte-flow__controls-button {
+  border-bottom: none !important;
+  border-right: 1px solid rgba(51, 65, 85, 0.6) !important;
+}
+
+.svelte-flow__controls.horizontal .svelte-flow__controls-button:last-child {
+  border-right: none !important;
+}
+
+.svelte-flow__controls-button:hover {
+  background-color: var(--slate-800) !important;
+  color: var(--cyan-300) !important;
+}
+
+.svelte-flow__controls-button:active {
+  background-color: var(--slate-700) !important;
+  transform: scale(0.96);
+}
+
+.svelte-flow__controls-button:disabled {
+  opacity: 0.3 !important;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.svelte-flow__controls-button svg {
+  width: 16px !important;
+  height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  fill: currentColor !important;
 }
 
 /* Simulator Modal & Floating Docked Widget */
