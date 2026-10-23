@@ -201,9 +201,18 @@ export function generateVxml(
         if (p) lines.push(p);
 
         if (field.type === 'custom' && field.customGrammar) {
-          lines.push(`      <grammar type="application/srgs+xml" root="ROOT" version="1.0">`);
-          lines.push(`        ${field.customGrammar.trim()}`);
-          lines.push(`      </grammar>`);
+          const trimmed = field.customGrammar.trim();
+          if (trimmed.startsWith('<grammar')) {
+            const indented = trimmed
+              .split('\n')
+              .map((line) => '      ' + line)
+              .join('\n');
+            lines.push(indented);
+          } else {
+            lines.push(`      <grammar type="application/srgs+xml" version="1.0">`);
+            lines.push(`        ${trimmed}`);
+            lines.push(`      </grammar>`);
+          }
         }
 
         // Filled handler

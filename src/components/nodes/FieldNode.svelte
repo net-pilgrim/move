@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Handle, Position } from '@xyflow/svelte';
-  import { Hash, Volume2, CheckCircle2, Clock, AlertTriangle } from '@lucide/svelte';
+  import { Hash, Volume2, CheckCircle2, Clock, AlertTriangle, Sparkles } from '@lucide/svelte';
   import type { FieldNodeData } from '../../types/vxml';
 
   let { id, data, selected = false }: { id: string; data: FieldNodeData; selected?: boolean } = $props();
@@ -38,9 +38,15 @@
           ACTIVE
         </span>
       {/if}
-      <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/80 text-emerald-300 font-mono border border-emerald-700/50">
-        {data.type || 'digits'}
-      </span>
+      {#if data.type === 'custom'}
+        <span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-200 font-mono border border-purple-700/60 flex items-center gap-1">
+          <Sparkles class="w-2.5 h-2.5 text-amber-300" /> SRGS
+        </span>
+      {:else}
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/80 text-emerald-300 font-mono border border-emerald-700/50">
+          {data.type || 'digits'}
+        </span>
+      {/if}
     </div>
   </div>
 
@@ -54,6 +60,13 @@
     {:else}
       <div class="text-[11px] text-amber-400/80 flex items-center gap-1 italic">
         <AlertTriangle class="w-3 h-3" /> No prompt defined
+      </div>
+    {/if}
+
+    {#if data.type === 'custom' && data.customGrammar}
+      <div class="flex items-center gap-1.5 text-[10px] text-purple-300 bg-purple-950/40 px-2 py-1 rounded border border-purple-800/40 font-mono">
+        <Sparkles class="w-3 h-3 text-amber-400 shrink-0" />
+        <span class="truncate">Custom SRGS 1.0 Grammar Active</span>
       </div>
     {/if}
 

@@ -395,5 +395,541 @@ export const TEMPLATES: VxmlTemplate[] = [
         label: 'next'
       }
     ]
+  },
+  {
+    id: 'speech-flight-bot',
+    name: 'Speech Airline Assistant (SRGS Grammars)',
+    description: 'Voice-driven flight assistant utilizing custom SRGS 1.0 XML speech recognition grammars, semantic normalization, and conditional confirmation.',
+    settings: {
+      ...getDefaultSettings(),
+      globalVars: [
+        { name: 'destination', expr: "''" },
+        { name: 'cabin_class', expr: "''" },
+        { name: 'booking_confirmed', expr: 'false' }
+      ]
+    },
+    nodes: [
+      {
+        id: 'welcome_block',
+        type: 'vxml-block',
+        position: { x: 50, y: 150 },
+        data: {
+          label: 'Welcome Greeting',
+          dialogId: 'welcome_block',
+          blockName: 'welcome_msg',
+          prompt: {
+            text: 'Welcome to SkyWay Airlines speech reservation service. We can help you book flights across North America and Europe.'
+          },
+          next: 'dest_field'
+        }
+      },
+      {
+        id: 'dest_field',
+        type: 'vxml-field',
+        position: { x: 420, y: 150 },
+        data: {
+          label: 'Destination City',
+          dialogId: 'dest_field',
+          fieldName: 'destination',
+          type: 'custom',
+          prompt: {
+            text: 'Which destination city would you like to fly to? We serve New York, Los Angeles, Chicago, San Francisco, and London.',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="CITY_SELECTION"
+         tag-format="semantics/1.0">
+
+  <rule id="CITY_SELECTION" scope="public">
+    <one-of>
+      <item>new york <tag>out = "NYC";</tag></item>
+      <item>jfk <tag>out = "NYC";</tag></item>
+      <item>nyc <tag>out = "NYC";</tag></item>
+      <item>los angeles <tag>out = "LAX";</tag></item>
+      <item>lax <tag>out = "LAX";</tag></item>
+      <item>chicago <tag>out = "ORD";</tag></item>
+      <item>o'hare <tag>out = "ORD";</tag></item>
+      <item>san francisco <tag>out = "SFO";</tag></item>
+      <item>sfo <tag>out = "SFO";</tag></item>
+      <item>london <tag>out = "LHR";</tag></item>
+      <item>heathrow <tag>out = "LHR";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'cabin_field',
+          nomatchPrompt: 'Sorry, we fly to New York, Los Angeles, Chicago, San Francisco, and London. Please state your destination city.',
+          noinputPrompt: 'Please speak the city you wish to visit.'
+        }
+      },
+      {
+        id: 'cabin_field',
+        type: 'vxml-field',
+        position: { x: 800, y: 150 },
+        data: {
+          label: 'Cabin Class',
+          dialogId: 'cabin_field',
+          fieldName: 'cabin_class',
+          type: 'custom',
+          prompt: {
+            text: 'What cabin class would you prefer? First class, Business, or Economy?',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="CABIN_CLASS"
+         tag-format="semantics/1.0">
+
+  <rule id="CABIN_CLASS" scope="public">
+    <one-of>
+      <item>first class <tag>out = "FIRST";</tag></item>
+      <item>first <tag>out = "FIRST";</tag></item>
+      <item>business class <tag>out = "BUSINESS";</tag></item>
+      <item>business <tag>out = "BUSINESS";</tag></item>
+      <item>executive <tag>out = "BUSINESS";</tag></item>
+      <item>economy class <tag>out = "ECONOMY";</tag></item>
+      <item>economy <tag>out = "ECONOMY";</tag></item>
+      <item>coach <tag>out = "ECONOMY";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'confirm_field',
+          nomatchPrompt: 'Please choose First class, Business class, or Economy.',
+          noinputPrompt: 'Please specify your preferred cabin class.'
+        }
+      },
+      {
+        id: 'confirm_field',
+        type: 'vxml-field',
+        position: { x: 1180, y: 150 },
+        data: {
+          label: 'Confirm Flight',
+          dialogId: 'confirm_field',
+          fieldName: 'booking_confirmed',
+          type: 'custom',
+          prompt: {
+            text: 'Would you like to confirm this flight reservation?',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="YES_NO"
+         tag-format="semantics/1.0">
+
+  <rule id="YES_NO" scope="public">
+    <one-of>
+      <item>yes <tag>out = true;</tag></item>
+      <item>yeah <tag>out = true;</tag></item>
+      <item>yep <tag>out = true;</tag></item>
+      <item>correct <tag>out = true;</tag></item>
+      <item>confirm <tag>out = true;</tag></item>
+      <item>sure <tag>out = true;</tag></item>
+      <item>no <tag>out = false;</tag></item>
+      <item>nope <tag>out = false;</tag></item>
+      <item>cancel <tag>out = false;</tag></item>
+      <item>negative <tag>out = false;</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'eval_confirm',
+          nomatchPrompt: 'Please say Yes to confirm or No to cancel.',
+          noinputPrompt: 'Please say Yes or No.'
+        }
+      },
+      {
+        id: 'eval_confirm',
+        type: 'vxml-condition',
+        position: { x: 1560, y: 150 },
+        data: {
+          label: 'Check Confirmation',
+          dialogId: 'eval_confirm',
+          condition: "booking_confirmed === true || booking_confirmed === 'true'",
+          truePrompt: 'Your flight reservation has been successfully confirmed! Details have been sent to your account.',
+          falsePrompt: 'Your booking has been cancelled as requested.',
+          trueNext: 'thankyou_block',
+          falseNext: 'cancel_block'
+        }
+      },
+      {
+        id: 'thankyou_block',
+        type: 'vxml-block',
+        position: { x: 1950, y: 70 },
+        data: {
+          label: 'Confirmed Summary',
+          dialogId: 'thankyou_block',
+          blockName: 'booked',
+          prompt: {
+            text: 'Thank you for choosing SkyWay Airlines. We look forward to welcoming you aboard.'
+          },
+          next: 'flight_hangup'
+        }
+      },
+      {
+        id: 'cancel_block',
+        type: 'vxml-block',
+        position: { x: 1950, y: 260 },
+        data: {
+          label: 'Cancelled Notice',
+          dialogId: 'cancel_block',
+          blockName: 'cancelled',
+          prompt: {
+            text: 'Thank you for calling SkyWay Airlines. Please contact us again whenever you are ready to travel.'
+          },
+          next: 'flight_hangup'
+        }
+      },
+      {
+        id: 'flight_hangup',
+        type: 'vxml-disconnect',
+        position: { x: 2320, y: 160 },
+        data: {
+          label: 'Call Disconnect',
+          dialogId: 'flight_hangup',
+          prompt: {
+            text: 'Goodbye and have a wonderful day.'
+          }
+        }
+      }
+    ],
+    edges: [
+      {
+        id: 'e_fl_welcome_dest',
+        source: 'welcome_block',
+        sourceHandle: 'next',
+        target: 'dest_field',
+        label: 'begin'
+      },
+      {
+        id: 'e_fl_dest_cabin',
+        source: 'dest_field',
+        sourceHandle: 'filled',
+        target: 'cabin_field',
+        label: 'city selected'
+      },
+      {
+        id: 'e_fl_cabin_confirm',
+        source: 'cabin_field',
+        sourceHandle: 'filled',
+        target: 'confirm_field',
+        label: 'class selected'
+      },
+      {
+        id: 'e_fl_confirm_eval',
+        source: 'confirm_field',
+        sourceHandle: 'filled',
+        target: 'eval_confirm',
+        label: 'answered'
+      },
+      {
+        id: 'e_fl_eval_true',
+        source: 'eval_confirm',
+        sourceHandle: 'true',
+        target: 'thankyou_block',
+        label: 'confirmed (true)'
+      },
+      {
+        id: 'e_fl_eval_false',
+        source: 'eval_confirm',
+        sourceHandle: 'false',
+        target: 'cancel_block',
+        label: 'cancelled (false)'
+      },
+      {
+        id: 'e_fl_ty_hangup',
+        source: 'thankyou_block',
+        sourceHandle: 'next',
+        target: 'flight_hangup',
+        label: 'complete'
+      },
+      {
+        id: 'e_fl_cancel_hangup',
+        source: 'cancel_block',
+        sourceHandle: 'next',
+        target: 'flight_hangup',
+        label: 'exit'
+      }
+    ]
+  },
+  {
+    id: 'speech-dept-router',
+    name: 'Speech-Driven Department Router (SRGS)',
+    description: 'Natural language speech IVR using multi-intent SRGS 1.0 grammar to route callers to Billing, Technical Support, Sales, or Live Operator.',
+    settings: {
+      ...getDefaultSettings(),
+      globalVars: [
+        { name: 'department_choice', expr: "''" }
+      ]
+    },
+    nodes: [
+      {
+        id: 'welcome_intro',
+        type: 'vxml-block',
+        position: { x: 50, y: 150 },
+        data: {
+          label: 'Enterprise Greeting',
+          dialogId: 'welcome_intro',
+          blockName: 'greeting',
+          prompt: {
+            text: 'Thank you for calling Apex Cloud Enterprise Services.'
+          },
+          next: 'ask_department'
+        }
+      },
+      {
+        id: 'ask_department',
+        type: 'vxml-field',
+        position: { x: 420, y: 150 },
+        data: {
+          label: 'Speech Department Query',
+          dialogId: 'ask_department',
+          fieldName: 'department_choice',
+          type: 'custom',
+          prompt: {
+            text: 'Please tell us how we can assist you today. You can say Billing and Payments, Technical Support, Sales Inquiries, or Speak to an Agent.',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="DEPARTMENTS"
+         tag-format="semantics/1.0">
+
+  <rule id="DEPARTMENTS" scope="public">
+    <one-of>
+      <item>billing <tag>out = "billing";</tag></item>
+      <item>bill <tag>out = "billing";</tag></item>
+      <item>invoice <tag>out = "billing";</tag></item>
+      <item>payments <tag>out = "billing";</tag></item>
+      <item>pay my bill <tag>out = "billing";</tag></item>
+      <item>technical support <tag>out = "support";</tag></item>
+      <item>tech support <tag>out = "support";</tag></item>
+      <item>system issue <tag>out = "support";</tag></item>
+      <item>help desk <tag>out = "support";</tag></item>
+      <item>troubleshooting <tag>out = "support";</tag></item>
+      <item>sales <tag>out = "sales";</tag></item>
+      <item>purchase <tag>out = "sales";</tag></item>
+      <item>pricing <tag>out = "sales";</tag></item>
+      <item>new subscription <tag>out = "sales";</tag></item>
+      <item>upgrade <tag>out = "sales";</tag></item>
+      <item>speak to an agent <tag>out = "operator";</tag></item>
+      <item>agent <tag>out = "operator";</tag></item>
+      <item>operator <tag>out = "operator";</tag></item>
+      <item>human <tag>out = "operator";</tag></item>
+      <item>representative <tag>out = "operator";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'route_dept_billing',
+          nomatchPrompt: 'Sorry, I did not catch that. Please say Billing, Technical Support, Sales, or Speak to an Agent.',
+          noinputPrompt: 'Please speak the department you would like to reach.'
+        }
+      },
+      {
+        id: 'route_dept_billing',
+        type: 'vxml-condition',
+        position: { x: 800, y: 150 },
+        data: {
+          label: 'Is Billing?',
+          dialogId: 'route_dept_billing',
+          condition: "department_choice === 'billing'",
+          truePrompt: 'Connecting you to our Automated Billing and Payment Portal.',
+          falsePrompt: '',
+          trueNext: 'billing_block',
+          falseNext: 'route_dept_support'
+        }
+      },
+      {
+        id: 'route_dept_support',
+        type: 'vxml-condition',
+        position: { x: 1180, y: 240 },
+        data: {
+          label: 'Is Tech Support?',
+          dialogId: 'route_dept_support',
+          condition: "department_choice === 'support'",
+          truePrompt: 'Connecting you to Enterprise Cloud Technical Support.',
+          falsePrompt: '',
+          trueNext: 'support_block',
+          falseNext: 'route_dept_sales'
+        }
+      },
+      {
+        id: 'route_dept_sales',
+        type: 'vxml-condition',
+        position: { x: 1560, y: 320 },
+        data: {
+          label: 'Is Sales?',
+          dialogId: 'route_dept_sales',
+          condition: "department_choice === 'sales'",
+          truePrompt: 'Directing your call to Enterprise Sales and Solutions.',
+          falsePrompt: 'Connecting you to our next available customer care operator.',
+          trueNext: 'sales_block',
+          falseNext: 'transfer_operator'
+        }
+      },
+      {
+        id: 'billing_block',
+        type: 'vxml-block',
+        position: { x: 1180, y: 50 },
+        data: {
+          label: 'Billing Portal',
+          dialogId: 'billing_block',
+          blockName: 'billing_info',
+          prompt: {
+            text: 'Your current account balance is zero dollars. No outstanding payment is due at this time.'
+          },
+          next: 'call_disconnect'
+        }
+      },
+      {
+        id: 'support_block',
+        type: 'vxml-block',
+        position: { x: 1560, y: 150 },
+        data: {
+          label: 'Support Portal',
+          dialogId: 'support_block',
+          blockName: 'support_info',
+          prompt: {
+            text: 'All cloud systems are operating normally. Our team is ready to assist with your incident ticket.'
+          },
+          next: 'call_disconnect'
+        }
+      },
+      {
+        id: 'sales_block',
+        type: 'vxml-block',
+        position: { x: 1950, y: 250 },
+        data: {
+          label: 'Sales Desk',
+          dialogId: 'sales_block',
+          blockName: 'sales_info',
+          prompt: {
+            text: 'Thank you for your interest in Apex Cloud Enterprise Solutions. A sales executive has been assigned to your account.'
+          },
+          next: 'call_disconnect'
+        }
+      },
+      {
+        id: 'transfer_operator',
+        type: 'vxml-transfer',
+        position: { x: 1950, y: 440 },
+        data: {
+          label: 'Operator Transfer',
+          dialogId: 'transfer_operator',
+          transferName: 'agent_transfer',
+          dest: 'tel:+18005550199',
+          bridge: true,
+          connecttimeout: '30s',
+          prompt: {
+            text: 'Please hold while we transfer you to an operator.'
+          },
+          next: 'call_disconnect'
+        }
+      },
+      {
+        id: 'call_disconnect',
+        type: 'vxml-disconnect',
+        position: { x: 2320, y: 220 },
+        data: {
+          label: 'End Session',
+          dialogId: 'call_disconnect',
+          prompt: {
+            text: 'Thank you for contacting Apex Cloud Solutions. Goodbye.'
+          }
+        }
+      }
+    ],
+    edges: [
+      {
+        id: 'e_dept_welcome_ask',
+        source: 'welcome_intro',
+        sourceHandle: 'next',
+        target: 'ask_department',
+        label: 'ask'
+      },
+      {
+        id: 'e_dept_ask_billing',
+        source: 'ask_department',
+        sourceHandle: 'filled',
+        target: 'route_dept_billing',
+        label: 'spoken request'
+      },
+      {
+        id: 'e_dept_billing_true',
+        source: 'route_dept_billing',
+        sourceHandle: 'true',
+        target: 'billing_block',
+        label: 'billing'
+      },
+      {
+        id: 'e_dept_billing_false',
+        source: 'route_dept_billing',
+        sourceHandle: 'false',
+        target: 'route_dept_support',
+        label: 'not billing'
+      },
+      {
+        id: 'e_dept_support_true',
+        source: 'route_dept_support',
+        sourceHandle: 'true',
+        target: 'support_block',
+        label: 'support'
+      },
+      {
+        id: 'e_dept_support_false',
+        source: 'route_dept_support',
+        sourceHandle: 'false',
+        target: 'route_dept_sales',
+        label: 'not support'
+      },
+      {
+        id: 'e_dept_sales_true',
+        source: 'route_dept_sales',
+        sourceHandle: 'true',
+        target: 'sales_block',
+        label: 'sales'
+      },
+      {
+        id: 'e_dept_sales_false',
+        source: 'route_dept_sales',
+        sourceHandle: 'false',
+        target: 'transfer_operator',
+        label: 'operator'
+      },
+      {
+        id: 'e_dept_bill_done',
+        source: 'billing_block',
+        sourceHandle: 'next',
+        target: 'call_disconnect',
+        label: 'complete'
+      },
+      {
+        id: 'e_dept_supp_done',
+        source: 'support_block',
+        sourceHandle: 'next',
+        target: 'call_disconnect',
+        label: 'complete'
+      },
+      {
+        id: 'e_dept_sales_done',
+        source: 'sales_block',
+        sourceHandle: 'next',
+        target: 'call_disconnect',
+        label: 'complete'
+      },
+      {
+        id: 'e_dept_xfer_done',
+        source: 'transfer_operator',
+        sourceHandle: 'next',
+        target: 'call_disconnect',
+        label: 'hangup'
+      }
+    ]
   }
 ];

@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/svelte';
-import { DOMParser as XmldomParser } from '@xmldom/xmldom';
+import { DOMParser as XmldomParser, XMLSerializer as XmldomSerializer } from '@xmldom/xmldom';
 import type {
   VxmlDocSettings,
   MenuNodeData,
@@ -28,6 +28,13 @@ function getDOMParser(): any {
     return new DOMParser();
   }
   return new XmldomParser();
+}
+
+function serializeXmlNode(node: any): string {
+  if (typeof XMLSerializer !== 'undefined') {
+    return new XMLSerializer().serializeToString(node);
+  }
+  return new XmldomSerializer().serializeToString(node);
 }
 
 function getDirectChildren(parent: Element, tagNames?: string[]): Element[] {
@@ -269,8 +276,31 @@ export function parseVxml(xmlText: string): ParseResult {
     const fieldEl = findFirst(el, 'field');
     if (fieldEl) {
       const fieldName = fieldEl.getAttribute('name') || 'field';
-      const typeRaw = fieldEl.getAttribute('type') || 'digits';
+      const typeAttr = fieldEl.getAttribute('type') || '';
       const prompt = extractPrompt(fieldEl);
+
+      const grammarEl = findFirst(fieldEl, 'grammar');
+      let customGrammar: string | undefined = undefined;
+      let fieldType: string = 'digits';
+
+      if (grammarEl) {
+        fieldType = 'custom';
+        customGrammar = serializeXmlNode(grammarEl);
+      } else if (typeAttr) {
+        fieldType = typeAttr.startsWith('boolean')
+          ? 'boolean'
+          : typeAttr.startsWith('number')
+            ? 'number'
+            : typeAttr.startsWith('currency')
+              ? 'currency'
+              : typeAttr.startsWith('phone')
+                ? 'phone'
+                : typeAttr.startsWith('time')
+                  ? 'time'
+                  : typeAttr.startsWith('date')
+                    ? 'date'
+                    : 'digits';
+      }
 
       const filledEl = findFirst(fieldEl, 'filled');
       const filledGoto = filledEl ? findFirst(filledEl, 'goto')?.getAttribute('next')?.replace(/^#/, '') : undefined;
@@ -307,23 +337,15 @@ export function parseVxml(xmlText: string): ParseResult {
         });
       }
 
+      const grammarParams = (!customGrammar && typeAttr.includes('?')) ? '?' + typeAttr.split('?')[1] : undefined;
+
       const fieldData: FieldNodeData = {
         label: `Field: ${fieldName}`,
         dialogId: id,
         fieldName,
-        type: (typeRaw.startsWith('boolean')
-          ? 'boolean'
-          : typeRaw.startsWith('number')
-            ? 'number'
-            : typeRaw.startsWith('currency')
-              ? 'currency'
-              : typeRaw.startsWith('phone')
-                ? 'phone'
-                : typeRaw.startsWith('time')
-                  ? 'time'
-                  : typeRaw.startsWith('date')
-                    ? 'date'
-                    : 'digits') as any,
+        type: fieldType as any,
+        customGrammar,
+        grammarParams,
         prompt,
         filledNext: filledGoto,
         noinputPrompt,

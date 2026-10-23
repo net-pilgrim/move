@@ -2,7 +2,8 @@
 
 export interface SrgsItem {
   id: string;
-  phrase: string;       // Utterance or DTMF string (e.g. "sales", "representative", "1")
+  phrase: string;       // Utterance or DTMF string (e.g. "sales", "representative", "1"), or rule reference
+  ruleRef?: string;     // Referenced rule ID (e.g. "YES_NO", "DEPARTMENTS")
   semanticTag?: string; // Semantic interpretation tag, e.g. 'out = "agent";' or 'out.choice = "yes";'
   weight?: number;      // e.g. 1.0
   repeat?: '0-1' | '1+' | '0+'; // Repetition pattern

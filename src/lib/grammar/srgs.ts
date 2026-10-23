@@ -17,6 +17,10 @@ function escapeXml(unsafe: string = ''): string {
     .replace(/'/g, '&apos;');
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function getDefaultSrgsGrammar(): SrgsGrammar {
   return {
     version: '1.0',
@@ -44,43 +48,45 @@ export function getDefaultSrgsGrammar(): SrgsGrammar {
 
 export function srgsToXml(g: SrgsGrammar): string {
   const lines: string[] = [];
+  const rootName = g.root || (g.rules[0] ? g.rules[0].name : 'ROOT');
   lines.push('<grammar version="1.0"');
   lines.push('         xmlns="http://www.w3.org/2001/06/grammar"');
   lines.push(`         xml:lang="${escapeXml(g.xmlLang || 'en-US')}"`);
   lines.push(`         mode="${g.mode || 'voice'}"`);
-  lines.push(`         root="${escapeXml(g.root || 'ROOT')}"`);
+  lines.push(`         root="${escapeXml(rootName)}"`);
   lines.push(`         tag-format="${g.tagFormat || 'semantics/1.0'}">`);
 
   for (const rule of g.rules) {
     lines.push(`\n  <rule id="${escapeXml(rule.name)}" scope="${rule.scope || 'public'}">`);
 
-    if (rule.type === 'one-of') {
+    const renderItem = (item: SrgsItem, indent: string): string => {
+      const attrs: string[] = [];
+      if (item.repeat) attrs.push(`repeat="${item.repeat}"`);
+      if (item.weight && item.weight !== 1.0) attrs.push(`weight="${item.weight}"`);
+      const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
+
+      const ref = item.ruleRef || (item.phrase.startsWith('#') ? item.phrase.slice(1).trim() : undefined);
+      const content = ref
+        ? `<ruleref uri="#${escapeXml(ref)}"/>`
+        : escapeXml(item.phrase);
+
+      if (item.semanticTag) {
+        return `${indent}<item${attrStr}>${content} <tag>${escapeXml(item.semanticTag)}</tag></item>`;
+      } else {
+        return `${indent}<item${attrStr}>${content}</item>`;
+      }
+    };
+
+    if (rule.type === 'sequence') {
+      for (const item of rule.items) {
+        lines.push(renderItem(item, '    '));
+      }
+    } else {
       lines.push('    <one-of>');
       for (const item of rule.items) {
-        const attrs: string[] = [];
-        if (item.repeat) attrs.push(`repeat="${item.repeat}"`);
-        if (item.weight && item.weight !== 1.0) attrs.push(`weight="${item.weight}"`);
-        const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
-
-        if (item.semanticTag) {
-          lines.push(`      <item${attrStr}>${escapeXml(item.phrase)} <tag>${escapeXml(item.semanticTag)}</tag></item>`);
-        } else {
-          lines.push(`      <item${attrStr}>${escapeXml(item.phrase)}</item>`);
-        }
+        lines.push(renderItem(item, '      '));
       }
       lines.push('    </one-of>');
-    } else {
-      // Sequence
-      for (const item of rule.items) {
-        const attrs: string[] = [];
-        if (item.repeat) attrs.push(`repeat="${item.repeat}"`);
-        const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
-        if (item.semanticTag) {
-          lines.push(`    <item${attrStr}>${escapeXml(item.phrase)} <tag>${escapeXml(item.semanticTag)}</tag></item>`);
-        } else {
-          lines.push(`    <item${attrStr}>${escapeXml(item.phrase)}</item>`);
-        }
-      }
     }
 
     lines.push('  </rule>');
@@ -95,11 +101,12 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
   const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
 
   const gEls = xmlDoc.getElementsByTagName('grammar');
-  const gEl = gEls.length > 0 ? gEls[0] : null;
-
-  if (!gEl) {
+  if (gEls.length === 0) {
     return getDefaultSrgsGrammar();
   }
+
+  // Handle nested grammar element if present
+  const gEl = gEls.length > 1 ? gEls[gEls.length - 1] : gEls[0];
 
   const grammar: SrgsGrammar = {
     version: '1.0',
@@ -128,6 +135,13 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
       const tagEls = itEl.getElementsByTagName('tag');
       const tag = tagEls.length > 0 ? tagEls[0].textContent?.trim() : undefined;
 
+      const rulerefEls = itEl.getElementsByTagName('ruleref');
+      let ruleRef: string | undefined = undefined;
+      if (rulerefEls.length > 0) {
+        const uri = rulerefEls[0].getAttribute('uri') || '';
+        ruleRef = uri.replace(/^#/, '');
+      }
+
       // Extract phrase text without tag text
       let phrase = '';
       for (let k = 0; k < itEl.childNodes.length; k++) {
@@ -136,9 +150,15 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
           phrase += cn.nodeValue || '';
         }
       }
-      phrase = phrase.trim() || itEl.textContent?.trim() || '';
-      if (tag && phrase.includes(tag)) {
-        phrase = phrase.replace(tag, '').trim();
+      phrase = phrase.trim();
+      if (!phrase && ruleRef) {
+        phrase = `#${ruleRef}`;
+      }
+      if (!phrase) {
+        phrase = itEl.textContent?.trim() || '';
+        if (tag && phrase.includes(tag)) {
+          phrase = phrase.replace(tag, '').trim();
+        }
       }
 
       const repeatAttr = itEl.getAttribute('repeat') as any;
@@ -147,10 +167,26 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
       items.push({
         id: `item_${i}_${j}`,
         phrase,
+        ruleRef,
         semanticTag: tag,
         repeat: repeatAttr || undefined,
         weight: weightAttr ? parseFloat(weightAttr) : undefined
       });
+    }
+
+    // Also check for direct ruleref elements not inside an item
+    const directRulerefs = rEl.getElementsByTagName('ruleref');
+    for (let k = 0; k < directRulerefs.length; k++) {
+      const rrEl = directRulerefs[k];
+      if (rrEl.parentNode?.nodeName?.toLowerCase() !== 'item') {
+        const uri = rrEl.getAttribute('uri') || '';
+        const refName = uri.replace(/^#/, '');
+        items.push({
+          id: `item_rr_${i}_${k}`,
+          phrase: `#${refName}`,
+          ruleRef: refName
+        });
+      }
     }
 
     grammar.rules.push({
@@ -169,28 +205,53 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
   return grammar;
 }
 
-export function testGrammarMatch(grammar: SrgsGrammar, input: string): GrammarTestResult {
-  const cleanInput = input.trim().toLowerCase();
-  if (!cleanInput) {
-    return { matched: false };
+function matchRule(
+  grammar: SrgsGrammar,
+  rule: SrgsRule,
+  cleanInput: string,
+  visitedRules: Set<string> = new Set()
+): GrammarTestResult | null {
+  if (visitedRules.has(rule.name)) {
+    return null; // Avoid circular reference loop
   }
+  visitedRules.add(rule.name);
 
-  // Find root rule
-  const rootRule = grammar.rules.find((r) => r.name === grammar.root) || grammar.rules[0];
-  if (!rootRule) return { matched: false };
+  for (const item of rule.items) {
+    // 1. If item references another rule
+    const refName = item.ruleRef || (item.phrase.startsWith('#') ? item.phrase.slice(1).trim() : undefined);
+    if (refName) {
+      const targetRule = grammar.rules.find((r) => r.name === refName || r.id === refName);
+      if (targetRule) {
+        const subMatch = matchRule(grammar, targetRule, cleanInput, visitedRules);
+        if (subMatch && subMatch.matched) {
+          let semanticVal = subMatch.semanticValue;
+          if (item.semanticTag) {
+            const m = item.semanticTag.match(/out\s*=\s*['"]?([^'";]+)['"]?/);
+            if (m) {
+              semanticVal = m[1];
+            }
+          }
+          return {
+            matched: true,
+            matchedPhrase: subMatch.matchedPhrase,
+            matchedRule: `${rule.name} -> ${subMatch.matchedRule}`,
+            semanticValue: semanticVal
+          };
+        }
+      }
+    }
 
-  for (const item of rootRule.items) {
+    // 2. Direct phrase match
     const cleanPhrase = item.phrase.trim().toLowerCase();
+    if (!cleanPhrase || cleanPhrase.startsWith('#')) continue;
 
-    // Check exact or partial match
-    if (
-      cleanInput === cleanPhrase ||
-      cleanInput.includes(cleanPhrase) ||
-      cleanPhrase.includes(cleanInput)
-    ) {
-      let semanticVal = item.phrase;
+    const escaped = escapeRegex(cleanPhrase);
+    const wordBoundary = new RegExp(`(?:^|\\s|,|\\.)${escaped}(?:$|\\s|,|\\.)`).test(cleanInput);
+    const isMatch = cleanInput === cleanPhrase || wordBoundary || cleanInput.includes(cleanPhrase);
+
+    if (isMatch) {
+      let semanticVal: string = item.phrase;
       if (item.semanticTag) {
-        // e.g. out = "sales"; -> "sales"
         const m = item.semanticTag.match(/out\s*=\s*['"]?([^'";]+)['"]?/);
         if (m) {
           semanticVal = m[1];
@@ -202,9 +263,42 @@ export function testGrammarMatch(grammar: SrgsGrammar, input: string): GrammarTe
       return {
         matched: true,
         matchedPhrase: item.phrase,
-        matchedRule: rootRule.name,
+        matchedRule: rule.name,
         semanticValue: semanticVal
       };
+    }
+  }
+
+  return null;
+}
+
+export function testGrammarMatch(
+  grammar: SrgsGrammar,
+  input: string,
+  targetRuleName?: string
+): GrammarTestResult {
+  const cleanInput = input.trim().toLowerCase();
+  if (!cleanInput) {
+    return { matched: false };
+  }
+
+  const startRuleName = targetRuleName || grammar.root || (grammar.rules[0]?.name);
+  const startRule = grammar.rules.find((r) => r.name === startRuleName) || grammar.rules[0];
+  if (!startRule) return { matched: false };
+
+  const directMatch = matchRule(grammar, startRule, cleanInput, new Set());
+  if (directMatch) {
+    return directMatch;
+  }
+
+  // Fallback: If testing Root rule and no direct match, evaluate other public rules
+  if (!targetRuleName || targetRuleName === grammar.root) {
+    for (const rule of grammar.rules) {
+      if (rule.name === startRule.name) continue;
+      const subRes = matchRule(grammar, rule, cleanInput, new Set());
+      if (subRes && subRes.matched) {
+        return subRes;
+      }
     }
   }
 
@@ -321,6 +415,132 @@ export const GRAMMAR_TEMPLATES: GrammarTemplate[] = [
             { id: 'dp3', phrase: 'billing and payments', semanticTag: 'out = "billing";' },
             { id: 'dp4', phrase: 'sales inquiries', semanticTag: 'out = "sales";' },
             { id: 'dp5', phrase: 'speak to an agent', semanticTag: 'out = "operator";' }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    id: 'flight-booking',
+    name: 'Flight Booking (Multi-Rule: Cities & Classes)',
+    description: 'Multi-rule grammar linking destination city rules and cabin class rules.',
+    grammar: {
+      version: '1.0',
+      xmlns: 'http://www.w3.org/2001/06/grammar',
+      xmlLang: 'en-US',
+      mode: 'voice',
+      root: 'FLIGHT_INQUIRY',
+      tagFormat: 'semantics/1.0',
+      rules: [
+        {
+          id: 'r_flight_root',
+          name: 'FLIGHT_INQUIRY',
+          scope: 'public',
+          type: 'one-of',
+          items: [
+            { id: 'fi_1', phrase: '#DEST_CITY', ruleRef: 'DEST_CITY' },
+            { id: 'fi_2', phrase: '#TRAVEL_CLASS', ruleRef: 'TRAVEL_CLASS' }
+          ]
+        },
+        {
+          id: 'r_dest_city',
+          name: 'DEST_CITY',
+          scope: 'public',
+          type: 'one-of',
+          items: [
+            { id: 'dc_1', phrase: 'new york', semanticTag: 'out = "NYC";' },
+            { id: 'dc_2', phrase: 'los angeles', semanticTag: 'out = "LAX";' },
+            { id: 'dc_3', phrase: 'chicago', semanticTag: 'out = "ORD";' },
+            { id: 'dc_4', phrase: 'san francisco', semanticTag: 'out = "SFO";' },
+            { id: 'dc_5', phrase: 'london', semanticTag: 'out = "LHR";' }
+          ]
+        },
+        {
+          id: 'r_travel_class',
+          name: 'TRAVEL_CLASS',
+          scope: 'public',
+          type: 'one-of',
+          items: [
+            { id: 'tc_1', phrase: 'first class', semanticTag: 'out = "FIRST";' },
+            { id: 'tc_2', phrase: 'business class', semanticTag: 'out = "BUSINESS";' },
+            { id: 'tc_3', phrase: 'economy class', semanticTag: 'out = "ECONOMY";' }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    id: 'pizza-order',
+    name: 'Pizza Ordering (Multi-Rule: Sizes & Crust)',
+    description: 'Multi-rule food order grammar demonstrating item rule references.',
+    grammar: {
+      version: '1.0',
+      xmlns: 'http://www.w3.org/2001/06/grammar',
+      xmlLang: 'en-US',
+      mode: 'voice',
+      root: 'PIZZA_ORDER',
+      tagFormat: 'semantics/1.0',
+      rules: [
+        {
+          id: 'r_pizza_root',
+          name: 'PIZZA_ORDER',
+          scope: 'public',
+          type: 'one-of',
+          items: [
+            { id: 'pz_1', phrase: '#PIZZA_SIZE', ruleRef: 'PIZZA_SIZE' },
+            { id: 'pz_2', phrase: '#CRUST_TYPE', ruleRef: 'CRUST_TYPE' }
+          ]
+        },
+        {
+          id: 'r_pizza_size',
+          name: 'PIZZA_SIZE',
+          scope: 'public',
+          type: 'one-of',
+          items: [
+            { id: 'ps_1', phrase: 'small', semanticTag: 'out = "small";' },
+            { id: 'ps_2', phrase: 'medium', semanticTag: 'out = "medium";' },
+            { id: 'ps_3', phrase: 'large', semanticTag: 'out = "large";' },
+            { id: 'ps_4', phrase: 'extra large', semanticTag: 'out = "xlarge";' }
+          ]
+        },
+        {
+          id: 'r_crust_type',
+          name: 'CRUST_TYPE',
+          scope: 'public',
+          type: 'one-of',
+          items: [
+            { id: 'ct_1', phrase: 'thin crust', semanticTag: 'out = "thin";' },
+            { id: 'ct_2', phrase: 'deep dish', semanticTag: 'out = "deep_dish";' },
+            { id: 'ct_3', phrase: 'stuffed crust', semanticTag: 'out = "stuffed";' },
+            { id: 'ct_4', phrase: 'gluten free', semanticTag: 'out = "gluten_free";' }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    id: 'clinic-scheduler',
+    name: 'Clinic Appointment Selection',
+    description: 'Healthcare service and specialist scheduling recognition grammar.',
+    grammar: {
+      version: '1.0',
+      xmlns: 'http://www.w3.org/2001/06/grammar',
+      xmlLang: 'en-US',
+      mode: 'voice',
+      root: 'CLINIC_APPT',
+      tagFormat: 'semantics/1.0',
+      rules: [
+        {
+          id: 'r_clinic',
+          name: 'CLINIC_APPT',
+          scope: 'public',
+          type: 'one-of',
+          items: [
+            { id: 'ca_1', phrase: 'doctor consultation', semanticTag: 'out = "doctor";' },
+            { id: 'ca_2', phrase: 'dental appointment', semanticTag: 'out = "dental";' },
+            { id: 'ca_3', phrase: 'blood test lab', semanticTag: 'out = "lab";' },
+            { id: 'ca_4', phrase: 'prescription refill', semanticTag: 'out = "pharmacy";' },
+            { id: 'ca_5', phrase: 'general inquiry', semanticTag: 'out = "reception";' }
           ]
         }
       ]

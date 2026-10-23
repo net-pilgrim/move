@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     X,
     Code,
@@ -18,7 +19,9 @@
     Layers,
     Search,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    Star,
+    ArrowRightLeft
   } from '@lucide/svelte';
   import type { SrgsGrammar, SrgsRule, SrgsItem, GrammarTestResult } from '../types/grammar';
   import {
@@ -48,25 +51,35 @@
 
   // Test phrase state
   let testInput = $state('');
+  let testTargetRule = $state('');
   let testResult = $state<GrammarTestResult | null>(null);
 
+  // Keep track of open transition to avoid reactive resets on user modifications
+  let prevIsOpen = false;
+
   $effect(() => {
-    if (isOpen) {
-      if (initialXml && initialXml.trim()) {
-        try {
-          grammar = xmlToSrgs(initialXml.trim());
-          xmlText = initialXml.trim();
-        } catch {
+    const currentlyOpen = isOpen;
+    if (currentlyOpen && !prevIsOpen) {
+      untrack(() => {
+        const raw = initialXml?.trim() || '';
+        if (raw) {
+          try {
+            grammar = xmlToSrgs(raw);
+            xmlText = raw;
+          } catch {
+            grammar = getDefaultSrgsGrammar();
+            xmlText = srgsToXml(grammar);
+          }
+        } else {
           grammar = getDefaultSrgsGrammar();
           xmlText = srgsToXml(grammar);
         }
-      } else {
-        grammar = getDefaultSrgsGrammar();
-        xmlText = srgsToXml(grammar);
-      }
-      testInput = '';
-      testResult = null;
+        testInput = '';
+        testResult = null;
+        testTargetRule = grammar.root || grammar.rules[0]?.name || '';
+      });
     }
+    prevIsOpen = currentlyOpen;
   });
 
   // Sync visual changes to XML
@@ -78,6 +91,12 @@
   function syncFromXml() {
     try {
       grammar = xmlToSrgs(xmlText);
+      if (!grammar.rules.some((r) => r.name === grammar.root) && grammar.rules.length > 0) {
+        grammar.root = grammar.rules[0].name;
+      }
+      if (!testTargetRule || !grammar.rules.some((r) => r.name === testTargetRule)) {
+        testTargetRule = grammar.root || grammar.rules[0]?.name || '';
+      }
     } catch {
       // Ignore parse issues while typing
     }
@@ -94,30 +113,69 @@
 
   function addRule() {
     const idx = grammar.rules.length + 1;
-    grammar.rules.push({
-      id: 'r_' + Math.random().toString(36).substring(2, 6),
-      name: `RULE_${idx}`,
+    let newName = `RULE_${idx}`;
+    let counter = idx;
+    while (grammar.rules.some((r) => r.name === newName)) {
+      counter++;
+      newName = `RULE_${counter}`;
+    }
+
+    const newRule: SrgsRule = {
+      id: 'r_' + Math.random().toString(36).substring(2, 8),
+      name: newName,
       scope: 'public',
       type: 'one-of',
       items: [
-        { id: 'i_' + Math.random().toString(36).substring(2, 6), phrase: 'example' }
+        {
+          id: 'i_' + Math.random().toString(36).substring(2, 8),
+          phrase: 'example phrase',
+          semanticTag: 'out = "value";'
+        }
       ]
-    });
+    };
+
+    grammar.rules.push(newRule);
+    if (!grammar.root) {
+      grammar.root = newRule.name;
+    }
     syncToXml();
   }
 
   function removeRule(ruleIdx: number) {
     if (grammar.rules.length <= 1) return;
+    const removedRule = grammar.rules[ruleIdx];
     grammar.rules.splice(ruleIdx, 1);
-    if (!grammar.rules.some((r) => r.name === grammar.root)) {
+    if (grammar.root === removedRule.name && grammar.rules.length > 0) {
       grammar.root = grammar.rules[0].name;
     }
+    if (testTargetRule === removedRule.name) {
+      testTargetRule = grammar.root || grammar.rules[0]?.name || '';
+    }
+    syncToXml();
+  }
+
+  function updateRuleName(rule: SrgsRule, newName: string) {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const oldName = rule.name;
+    rule.name = trimmed;
+    if (grammar.root === oldName) {
+      grammar.root = trimmed;
+    }
+    if (testTargetRule === oldName) {
+      testTargetRule = trimmed;
+    }
+    syncToXml();
+  }
+
+  function setAsRootRule(ruleName: string) {
+    grammar.root = ruleName;
     syncToXml();
   }
 
   function addItem(rule: SrgsRule) {
     rule.items.push({
-      id: 'i_' + Math.random().toString(36).substring(2, 6),
+      id: 'i_' + Math.random().toString(36).substring(2, 8),
       phrase: 'new phrase',
       semanticTag: 'out = "value";'
     });
@@ -125,7 +183,14 @@
   }
 
   function removeItem(rule: SrgsRule, itemIdx: number) {
-    rule.items.splice(itemIdx, 1);
+    if (rule.items.length <= 1) {
+      // Clear phrase rather than leaving empty rule
+      rule.items[0].phrase = '';
+      rule.items[0].semanticTag = '';
+      rule.items[0].ruleRef = undefined;
+    } else {
+      rule.items.splice(itemIdx, 1);
+    }
     syncToXml();
   }
 
@@ -133,11 +198,12 @@
     const tpl = GRAMMAR_TEMPLATES.find((t) => t.id === tplId);
     if (!tpl) return;
     grammar = JSON.parse(JSON.stringify(tpl.grammar));
+    testTargetRule = grammar.root || grammar.rules[0]?.name || '';
     syncToXml();
   }
 
   function runTest() {
-    testResult = testGrammarMatch(grammar, testInput);
+    testResult = testGrammarMatch(grammar, testInput, testTargetRule || undefined);
   }
 
   function copyXml() {
@@ -198,7 +264,7 @@
                 application/srgs+xml
               </span>
             </div>
-            <p class="text-xs text-slate-400">Design speech & DTMF grammars with semantic interpretation (&lt;tag&gt;) for VoiceXML 2.1</p>
+            <p class="text-xs text-slate-400">Design multi-rule speech & DTMF grammars with semantic interpretation (&lt;tag&gt;) for VoiceXML 2.1</p>
           </div>
         </div>
 
@@ -257,12 +323,15 @@
 
           <div class="flex items-center gap-1.5">
             <span class="text-slate-400 text-[11px]">Root Rule:</span>
-            <input
-              type="text"
+            <select
               bind:value={grammar.root}
-              oninput={syncToXml}
-              class="w-24 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 font-mono text-xs text-purple-300"
-            />
+              onchange={syncToXml}
+              class="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 font-mono text-xs text-purple-300 focus:outline-none focus:border-purple-500 cursor-pointer"
+            >
+              {#each grammar.rules as r}
+                <option value={r.name}>{r.name}</option>
+              {/each}
+            </select>
           </div>
 
           <div class="flex items-center gap-1.5">
@@ -311,18 +380,20 @@
           <!-- Visual Builder -->
           <div class="space-y-6">
             {#each grammar.rules as rule, rIdx}
-              <div class="bg-slate-950/70 rounded-xl border border-slate-800 p-4 space-y-3 shadow-sm">
+              <div class="bg-slate-950/70 rounded-xl border border-slate-800 p-4 space-y-3 shadow-sm {grammar.root === rule.name ? 'ring-1 ring-purple-600/40 border-purple-800/60' : ''}">
                 <!-- Rule Header -->
-                <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-slate-800">
+                  <div class="flex flex-wrap items-center gap-3">
                     <span class="text-[10px] font-mono text-purple-400 font-bold uppercase">&lt;rule&gt;</span>
+                    
                     <label class="flex items-center gap-1.5">
                       <span class="text-slate-400 text-[11px]">Rule ID:</span>
                       <input
                         type="text"
-                        bind:value={rule.name}
-                        oninput={syncToXml}
-                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 font-mono text-xs text-white"
+                        value={rule.name}
+                        oninput={(e) => updateRuleName(rule, e.currentTarget.value)}
+                        placeholder="RULE_NAME"
+                        class="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 font-mono text-xs text-white focus:outline-none focus:border-purple-500"
                       />
                     </label>
 
@@ -331,12 +402,39 @@
                       <select
                         bind:value={rule.scope}
                         onchange={syncToXml}
-                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
                       >
                         <option value="public">public</option>
                         <option value="private">private</option>
                       </select>
                     </label>
+
+                    <label class="flex items-center gap-1.5">
+                      <span class="text-slate-400 text-[11px]">Type:</span>
+                      <select
+                        bind:value={rule.type}
+                        onchange={syncToXml}
+                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 font-mono"
+                      >
+                        <option value="one-of">&lt;one-of&gt; (Choice / OR)</option>
+                        <option value="sequence">&lt;sequence&gt; (Sequence / AND)</option>
+                      </select>
+                    </label>
+
+                    {#if grammar.root === rule.name}
+                      <span class="px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 font-semibold text-[10px] border border-purple-700/60 flex items-center gap-1">
+                        <Star class="w-3 h-3 text-amber-400 fill-amber-400" />
+                        ROOT RULE
+                      </span>
+                    {:else}
+                      <button
+                        type="button"
+                        onclick={() => setAsRootRule(rule.name)}
+                        class="text-[10px] text-slate-400 hover:text-purple-300 hover:underline flex items-center gap-1 transition-colors"
+                      >
+                        Set as root
+                      </button>
+                    {/if}
                   </div>
 
                   <div class="flex items-center gap-2">
@@ -361,23 +459,46 @@
                 <!-- Items Table (Choices / Alternatives) -->
                 <div class="space-y-2">
                   <div class="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2">
-                    <span class="col-span-5">Spoken Phrase or DTMF Key</span>
-                    <span class="col-span-6">Semantic Interpretation (&lt;tag&gt;)</span>
+                    <span class="col-span-5">Phrase or Rule Reference (#RULE)</span>
+                    <span class="col-span-4">Semantic Interpretation (&lt;tag&gt;)</span>
+                    <span class="col-span-2">Repeat</span>
                     <span class="col-span-1 text-right">Action</span>
                   </div>
 
                   {#each rule.items as item, itIdx}
                     <div class="grid grid-cols-12 gap-2 items-center bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                      <div class="col-span-5">
+                      <div class="col-span-5 flex items-center gap-1.5">
                         <input
                           type="text"
                           bind:value={item.phrase}
                           oninput={syncToXml}
-                          placeholder="e.g. sales, billing..."
-                          class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-purple-500"
+                          placeholder="e.g. sales, yes, or #RULE_REF"
+                          class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-purple-500 font-mono"
                         />
+                        {#if grammar.rules.length > 1}
+                          <!-- Quick rule reference selector if multiple rules exist -->
+                          <select
+                            onchange={(e) => {
+                              if (e.currentTarget.value) {
+                                item.phrase = `#${e.currentTarget.value}`;
+                                item.ruleRef = e.currentTarget.value;
+                                e.currentTarget.value = '';
+                                syncToXml();
+                              }
+                            }}
+                            class="bg-slate-800 border border-slate-700 text-slate-300 text-[10px] rounded px-1 py-1.5 shrink-0 focus:outline-none"
+                            title="Reference another rule"
+                          >
+                            <option value="">#ref</option>
+                            {#each grammar.rules as otherR}
+                              {#if otherR.name !== rule.name}
+                                <option value={otherR.name}>#{otherR.name}</option>
+                              {/if}
+                            {/each}
+                          </select>
+                        {/if}
                       </div>
-                      <div class="col-span-6">
+                      <div class="col-span-4">
                         <input
                           type="text"
                           bind:value={item.semanticTag}
@@ -385,6 +506,18 @@
                           placeholder='out = "value";'
                           class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 font-mono text-xs text-emerald-300 focus:outline-none focus:border-purple-500"
                         />
+                      </div>
+                      <div class="col-span-2">
+                        <select
+                          bind:value={item.repeat}
+                          onchange={syncToXml}
+                          class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-purple-500 font-mono"
+                        >
+                          <option value="">repeat: 1 (exact)</option>
+                          <option value="0-1">repeat: 0-1 (optional ?)</option>
+                          <option value="1+">repeat: 1+ (one or more +)</option>
+                          <option value="0+">repeat: 0+ (any *)</option>
+                        </select>
                       </div>
                       <div class="col-span-1 flex justify-end">
                         <button
@@ -401,11 +534,13 @@
               </div>
             {/each}
 
+            <!-- Add Another Rule Button -->
             <button
+              type="button"
               onclick={addRule}
-              class="w-full py-2.5 rounded-xl border border-dashed border-slate-700 hover:border-purple-500 hover:bg-purple-950/20 text-slate-400 hover:text-purple-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+              class="w-full py-3 rounded-xl border-2 border-dashed border-purple-800/60 hover:border-purple-500 hover:bg-purple-950/30 text-purple-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
             >
-              <Plus class="w-4 h-4" />
+              <Plus class="w-4 h-4 text-purple-400" />
               <span>Add Another Rule (&lt;rule&gt;)</span>
             </button>
           </div>
@@ -460,7 +595,21 @@
             </div>
 
             <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-              <label for="test_grammar_input" class="block text-slate-400 text-xs">Simulated User Input (Spoken or DTMF):</label>
+              <div class="flex items-center justify-between">
+                <label for="test_grammar_input" class="block text-slate-400 text-xs">Simulated User Input (Spoken or DTMF):</label>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[11px] text-slate-400">Target Rule:</span>
+                  <select
+                    bind:value={testTargetRule}
+                    class="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono text-[11px] text-purple-300"
+                  >
+                    {#each grammar.rules as r}
+                      <option value={r.name}>{r.name} {r.name === grammar.root ? '(Root)' : ''}</option>
+                    {/each}
+                  </select>
+                </div>
+              </div>
+
               <div class="flex gap-2">
                 <input
                   id="test_grammar_input"
@@ -469,7 +618,7 @@
                   onkeydown={(e) => {
                     if (e.key === 'Enter') runTest();
                   }}
-                  placeholder={grammar.mode === 'voice' ? 'e.g. sales, billing, representative...' : 'e.g. 1, 2, 0...'}
+                  placeholder={grammar.mode === 'voice' ? 'e.g. sales, billing, yes, san francisco...' : 'e.g. 1, 2, 0...'}
                   class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
                 />
                 <button
@@ -507,7 +656,7 @@
                   </div>
                 {:else}
                   <p class="text-xs text-rose-300/80 pl-7">
-                    The utterance "{testInput}" did not match any of the active grammar items in rule &lt;rule id="{grammar.root}"&gt;.
+                    The utterance "{testInput}" did not match any of the active grammar items in rule &lt;rule id="{testTargetRule || grammar.root}"&gt;.
                   </p>
                 {/if}
               </div>
@@ -518,8 +667,12 @@
 
       <!-- Modal Footer -->
       <div class="px-5 py-3 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
-        <div class="text-[11px] text-slate-400">
-          Rules: <strong>{grammar.rules.length}</strong> • Total Items: <strong>{grammar.rules.reduce((acc, r) => acc + r.items.length, 0)}</strong>
+        <div class="text-[11px] text-slate-400 flex items-center gap-2">
+          <span>Rules: <strong class="text-slate-200">{grammar.rules.length}</strong></span>
+          <span>•</span>
+          <span>Total Items: <strong class="text-slate-200">{grammar.rules.reduce((acc, r) => acc + r.items.length, 0)}</strong></span>
+          <span>•</span>
+          <span>Root: <strong class="text-purple-300 font-mono">{grammar.root}</strong></span>
         </div>
 
         <div class="flex items-center gap-2">
@@ -531,7 +684,7 @@
           </button>
           <button
             onclick={handleSaveGrammar}
-            class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-950/40 transition-colors flex items-center gap-1.5"
+            class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Check class="w-3.5 h-3.5" />
             <span>Apply Grammar</span>

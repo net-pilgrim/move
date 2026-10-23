@@ -98,4 +98,75 @@ assert(matchResult.semanticValue === 'true', 'SRGS matcher extracts semantic val
 const nomatchResult = testGrammarMatch(parsedSrgs, 'maybe');
 assert(nomatchResult.matched === false, 'SRGS matcher correctly returns NOMATCH for unrecognized word');
 
-console.log('\n🎉 ALL 26 TESTS PASSED SUCCESSFULLY! VoiceXML 2.1 & SRGS 1.0 verified.');
+// Test 8: Dynamically adding rules to grammar & multi-rule XML serialization
+const dynamicGrammar = JSON.parse(JSON.stringify(yesNoTpl.grammar));
+dynamicGrammar.rules.push({
+  id: 'r_custom_rule',
+  name: 'ADDITIONAL_RULE',
+  scope: 'public',
+  type: 'one-of',
+  items: [
+    { id: 'i_add_1', phrase: 'operator', semanticTag: 'out = "agent";' },
+    { id: 'i_add_2', phrase: 'help desk', semanticTag: 'out = "agent";' }
+  ]
+});
+assert(dynamicGrammar.rules.length === 2, 'Added new rule to grammar rules array');
+const multiRuleXml = srgsToXml(dynamicGrammar);
+assert(multiRuleXml.includes('<rule id="ADDITIONAL_RULE" scope="public">'), 'Serialized XML includes newly added rule');
+const reParsedMultiRule = xmlToSrgs(multiRuleXml);
+assert(reParsedMultiRule.rules.length === 2, 'Parsed back 2 rules from serialized XML');
+assert(reParsedMultiRule.rules.some((r) => r.name === 'ADDITIONAL_RULE'), 'Parsed rule ADDITIONAL_RULE exists');
+
+// Test 9: Multi-Rule Grammar Matching with Rule References (<ruleref>)
+const flightTpl = GRAMMAR_TEMPLATES.find((t) => t.id === 'flight-booking')!;
+assert(flightTpl !== undefined, 'Found flight-booking multi-rule template');
+const flightMatchCity = testGrammarMatch(flightTpl.grammar, 'san francisco');
+assert(flightMatchCity.matched === true, 'Matches city utterance via rule reference');
+assert(flightMatchCity.semanticValue === 'SFO', 'Extracts normalized airport code SFO');
+const flightMatchClass = testGrammarMatch(flightTpl.grammar, 'business class');
+assert(flightMatchClass.matched === true, 'Matches class utterance via rule reference');
+assert(flightMatchClass.semanticValue === 'BUSINESS', 'Extracts cabin class BUSINESS');
+
+// Test 10: Speech Airline Assistant Flow (TEMPLATES[3])
+const tFlight = TEMPLATES[3];
+assert(tFlight.id === 'speech-flight-bot', 'Template 3 is speech-flight-bot flow');
+const vxmlFlight = generateVxml(tFlight.nodes, tFlight.edges, tFlight.settings);
+assert(!vxmlFlight.includes('<grammar type="application/srgs+xml" root="ROOT" version="1.0">\n      <grammar'), 'Does not produce duplicate nested grammar tags');
+assert(vxmlFlight.includes('root="CITY_SELECTION"'), 'Contains CITY_SELECTION root rule in destination field');
+const diagFlight = validateVxml(tFlight.nodes, tFlight.edges, tFlight.settings);
+assert(diagFlight.filter((d) => d.severity === 'error').length === 0, 'Speech flight flow produces 0 errors in validator');
+
+const parsedFlight = parseVxml(vxmlFlight);
+assert(!parsedFlight.error, 'Parsed speech flight flow VXML without errors');
+const parsedDestNode = parsedFlight.nodes.find((n) => n.id === 'dest_field');
+assert(parsedDestNode !== undefined, 'Found parsed dest_field node');
+assert((parsedDestNode!.data as any).type === 'custom', 'Parsed dest_field node has type="custom"');
+assert(Boolean((parsedDestNode!.data as any).customGrammar), 'Parsed dest_field node preserves customGrammar');
+
+// Test 11: Speech Department Router Flow (TEMPLATES[4])
+const tDept = TEMPLATES[4];
+assert(tDept.id === 'speech-dept-router', 'Template 4 is speech-dept-router flow');
+const vxmlDept = generateVxml(tDept.nodes, tDept.edges, tDept.settings);
+assert(vxmlDept.includes('root="DEPARTMENTS"'), 'Contains DEPARTMENTS root rule in speech field');
+const diagDept = validateVxml(tDept.nodes, tDept.edges, tDept.settings);
+assert(diagDept.filter((d) => d.severity === 'error').length === 0, 'Speech department flow produces 0 errors in validator');
+
+// Test 12: Simulator Execution with Custom SRGS Grammar
+import { IvrSimulator } from '../src/lib/simulator/ivr-engine';
+
+let simEventLogged = false;
+const sim = new IvrSimulator((state) => {
+  if (state.logs && state.logs.some((l) => l.text.includes('SRGS Grammar Match'))) {
+    simEventLogged = true;
+  }
+});
+
+sim.updateGraph(tDept.nodes, tDept.edges);
+sim.startCall('ask_department');
+assert(sim.state.currentNodeId === 'ask_department', 'Simulator active on speech field ask_department');
+// Submit spoken utterance matching grammar
+sim.submitInput('I want to pay my bill please');
+assert(simEventLogged === true, 'Simulator logged SRGS grammar match event');
+assert(sim.state.variables['department_choice'] === 'billing', 'Variable assigned normalized semantic value "billing"');
+
+console.log('\n🎉 ALL 41 TESTS PASSED SUCCESSFULLY! VoiceXML 2.1 & SRGS 1.0 verified.');

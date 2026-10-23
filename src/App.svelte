@@ -45,7 +45,7 @@
   import { autoLayoutNodes } from './lib/vxml/layout';
   import { TEMPLATES } from './lib/templates/templates';
   import { IvrSimulator, type SimulatorState } from './lib/simulator/ivr-engine';
-  import type { VxmlDocSettings, VxmlNodeType } from './types/vxml';
+  import type { VxmlDocSettings, VxmlNodeType, FieldNodeData } from './types/vxml';
   import type { ParseResult } from './lib/vxml/parser';
 
   // Initialize with the Customer Support Router template
@@ -74,8 +74,18 @@
   });
 
   function handleOpenGrammarStudio(initialXml: string = '', onSaveCallback?: (xml: string) => void) {
-    grammarModalXml = initialXml;
-    grammarSaveHandler = onSaveCallback || null;
+    if (!onSaveCallback && selectedNode && selectedNode.type === 'vxml-field') {
+      const fieldData = selectedNode.data as FieldNodeData;
+      grammarModalXml = initialXml || fieldData.customGrammar || '';
+      grammarSaveHandler = (newXml: string) => {
+        fieldData.type = 'custom';
+        fieldData.customGrammar = newXml;
+        handleUpdateNode(selectedNode!.id, fieldData);
+      };
+    } else {
+      grammarModalXml = initialXml;
+      grammarSaveHandler = onSaveCallback || null;
+    }
     showGrammarModal = true;
   }
 
@@ -782,8 +792,13 @@
     onSave={(newXml) => {
       if (grammarSaveHandler) {
         grammarSaveHandler(newXml);
+        showToast('Grammar applied to field node.');
+      } else {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(newXml);
+        }
+        showToast('Grammar copied to clipboard.');
       }
-      showToast('Grammar applied.');
     }}
     onClose={() => (showGrammarModal = false)}
   />
