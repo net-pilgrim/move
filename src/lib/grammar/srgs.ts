@@ -97,8 +97,25 @@ export function srgsToXml(g: SrgsGrammar): string {
 }
 
 export function xmlToSrgs(xmlText: string): SrgsGrammar {
+  const trimmed = xmlText ? xmlText.trim() : '';
+  if (!trimmed) {
+    return getDefaultSrgsGrammar();
+  }
+
+  let parseableXml = trimmed;
+  // If bare rule or items without root grammar tag, wrap it so it can still be parsed
+  if (!trimmed.includes('<grammar')) {
+    parseableXml = `<grammar version="1.0" xmlns="http://www.w3.org/2001/06/grammar" xml:lang="en-US" mode="voice" root="ROOT">\n${trimmed}\n</grammar>`;
+  }
+
   const parser = getDOMParser();
-  const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+  const xmlDoc = parser.parseFromString(parseableXml, 'text/xml');
+
+  // Check for parser errors in browser / xmldom
+  const parseErrors = xmlDoc.getElementsByTagName('parsererror');
+  if (parseErrors.length > 0) {
+    throw new Error('XML parsing error: ' + (parseErrors[0].textContent || 'Invalid XML syntax'));
+  }
 
   const gEls = xmlDoc.getElementsByTagName('grammar');
   if (gEls.length === 0) {
@@ -165,7 +182,7 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
       const weightAttr = itEl.getAttribute('weight');
 
       items.push({
-        id: `item_${i}_${j}`,
+        id: `item_${i}_${j}_${Math.random().toString(36).substring(2, 6)}`,
         phrase,
         ruleRef,
         semanticTag: tag,
@@ -182,7 +199,7 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
         const uri = rrEl.getAttribute('uri') || '';
         const refName = uri.replace(/^#/, '');
         items.push({
-          id: `item_rr_${i}_${k}`,
+          id: `item_rr_${i}_${k}_${Math.random().toString(36).substring(2, 6)}`,
           phrase: `#${refName}`,
           ruleRef: refName
         });
@@ -190,7 +207,7 @@ export function xmlToSrgs(xmlText: string): SrgsGrammar {
     }
 
     grammar.rules.push({
-      id: `rule_${i}`,
+      id: `rule_${i}_${Math.random().toString(36).substring(2, 6)}`,
       name: rName,
       scope: rScope,
       type: isOneOf ? 'one-of' : 'sequence',
@@ -215,6 +232,51 @@ function matchRule(
     return null; // Avoid circular reference loop
   }
   visitedRules.add(rule.name);
+
+  // If rule is sequence type, all items must match
+  if (rule.type === 'sequence') {
+    let currentInput = cleanInput;
+    const matchedPhrases: string[] = [];
+    const semanticParts: string[] = [];
+
+    for (const item of rule.items) {
+      const refName = item.ruleRef || (item.phrase.startsWith('#') ? item.phrase.slice(1).trim() : undefined);
+      if (refName) {
+        const targetRule = grammar.rules.find((r) => r.name === refName || r.id === refName);
+        if (targetRule) {
+          const subMatch = matchRule(grammar, targetRule, currentInput, new Set(visitedRules));
+          if (subMatch && subMatch.matched) {
+            if (subMatch.matchedPhrase) matchedPhrases.push(subMatch.matchedPhrase);
+            const sem = (item.semanticTag?.match(/out\s*=\s*['"]?([^'";]+)['"]?/)?.[1]) || subMatch.semanticValue || subMatch.matchedPhrase || '';
+            if (sem) semanticParts.push(sem);
+            continue;
+          }
+        }
+        return null;
+      }
+
+      const cleanPhrase = item.phrase.trim().toLowerCase();
+      if (!cleanPhrase) continue;
+      const isMatch = currentInput.includes(cleanPhrase);
+      if (isMatch) {
+        matchedPhrases.push(item.phrase);
+        const sem = item.semanticTag?.match(/out\s*=\s*['"]?([^'";]+)['"]?/)?.[1] || item.semanticTag || item.phrase;
+        semanticParts.push(sem);
+      } else if (item.repeat !== '0-1' && item.repeat !== '0+') {
+        return null;
+      }
+    }
+
+    if (matchedPhrases.length > 0) {
+      return {
+        matched: true,
+        matchedPhrase: matchedPhrases.join(' '),
+        matchedRule: rule.name,
+        semanticValue: semanticParts.join(' ')
+      };
+    }
+    return null;
+  }
 
   for (const item of rule.items) {
     // 1. If item references another rule

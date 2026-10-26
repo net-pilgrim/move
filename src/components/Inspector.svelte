@@ -311,7 +311,15 @@
                 {#if onOpenGrammarEditor}
                   <button
                     type="button"
-                    onclick={() => onOpenGrammarEditor && onOpenGrammarEditor(data.customGrammar || '', (newXml) => { data.customGrammar = newXml; triggerUpdate(); })}
+                    onclick={() => {
+                      if (onOpenGrammarEditor) {
+                        onOpenGrammarEditor(data.customGrammar || '', (newXml) => {
+                          data.type = 'custom';
+                          data.customGrammar = newXml;
+                          triggerUpdate();
+                        });
+                      }
+                    }}
                     class="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 font-medium"
                   >
                     <Sparkles class="w-3 h-3 text-amber-400" />
@@ -335,7 +343,11 @@
                   data.type = 'custom';
                   triggerUpdate();
                   if (onOpenGrammarEditor) {
-                    onOpenGrammarEditor(data.customGrammar || '', (newXml) => { data.customGrammar = newXml; triggerUpdate(); });
+                    onOpenGrammarEditor(data.customGrammar || '', (newXml) => {
+                      data.type = 'custom';
+                      data.customGrammar = newXml;
+                      triggerUpdate();
+                    });
                   }
                 }}
                 class="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-medium"

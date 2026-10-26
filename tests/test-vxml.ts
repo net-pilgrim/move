@@ -169,4 +169,61 @@ sim.submitInput('I want to pay my bill please');
 assert(simEventLogged === true, 'Simulator logged SRGS grammar match event');
 assert(sim.state.variables['department_choice'] === 'billing', 'Variable assigned normalized semantic value "billing"');
 
-console.log('\n🎉 ALL 41 TESTS PASSED SUCCESSFULLY! VoiceXML 2.1 & SRGS 1.0 verified.');
+// Test 13: Bare rule parsing in xmlToSrgs
+const bareRuleXml = `<rule id="CONFIRM" scope="public"><one-of><item>yes <tag>out = "yes";</tag></item><item>no <tag>out = "no";</tag></item></one-of></rule>`;
+const parsedBare = xmlToSrgs(bareRuleXml);
+assert(parsedBare.rules.length === 1, 'Parsed bare rule into 1 rule');
+assert(parsedBare.rules[0].name === 'CONFIRM', 'Parsed bare rule preserved rule id CONFIRM');
+assert(parsedBare.rules[0].items.length === 2, 'Parsed bare rule has 2 items');
+
+// Test 14: Sequence rule type matching
+const seqGrammar: SrgsGrammar = {
+  version: '1.0',
+  xmlns: 'http://www.w3.org/2001/06/grammar',
+  xmlLang: 'en-US',
+  mode: 'voice',
+  root: 'ORDER',
+  tagFormat: 'semantics/1.0',
+  rules: [
+    {
+      id: 'r_seq',
+      name: 'ORDER',
+      scope: 'public',
+      type: 'sequence',
+      items: [
+        { id: 'i1', phrase: 'large', semanticTag: 'out = "large";' },
+        { id: 'i2', phrase: 'pizza', semanticTag: 'out = "pizza";' }
+      ]
+    }
+  ]
+};
+const seqMatch = testGrammarMatch(seqGrammar, 'I would like a large pizza please');
+assert(seqMatch.matched === true, 'Sequence rule matches when all sequential items are present');
+const seqFail = testGrammarMatch(seqGrammar, 'I would like a small pizza please');
+assert(seqFail.matched === false, 'Sequence rule fails when required item is missing');
+
+// Test 15: Speech Banking & Account Verification Flow (TEMPLATES[5])
+const tBank = TEMPLATES[5];
+assert(tBank && tBank.id === 'speech-banking-auth', 'Template 5 is speech-banking-auth flow');
+const vxmlBank = generateVxml(tBank.nodes, tBank.edges, tBank.settings);
+assert(vxmlBank.includes('root="BANKING_INTENTS"'), 'Contains BANKING_INTENTS root rule in banking intent field');
+assert(vxmlBank.includes('root="ACCOUNT_TYPES"'), 'Contains ACCOUNT_TYPES root rule in account selection field');
+const diagBank = validateVxml(tBank.nodes, tBank.edges, tBank.settings);
+assert(diagBank.filter((d) => d.severity === 'error').length === 0, 'Speech banking flow produces 0 errors in validator');
+const parsedBank = parseVxml(vxmlBank);
+assert(!parsedBank.error, 'Parsed speech banking flow VXML without errors');
+assert(parsedBank.nodes.length >= 10, 'Parsed banking flow contains all dialog nodes');
+
+// Test 16: Artisanal Pizza Ordering Flow (TEMPLATES[6])
+const tPizza = TEMPLATES[6];
+assert(tPizza && tPizza.id === 'speech-pizza-order', 'Template 6 is speech-pizza-order flow');
+const vxmlPizza = generateVxml(tPizza.nodes, tPizza.edges, tPizza.settings);
+assert(vxmlPizza.includes('root="PIZZA_SPEC"'), 'Contains PIZZA_SPEC root rule in pizza crust field');
+assert(vxmlPizza.includes('root="TOPPINGS"'), 'Contains TOPPINGS root rule in pizza toppings field');
+assert(vxmlPizza.includes('root="FULFILLMENT"'), 'Contains FULFILLMENT root rule in pizza fulfillment field');
+const diagPizza = validateVxml(tPizza.nodes, tPizza.edges, tPizza.settings);
+assert(diagPizza.filter((d) => d.severity === 'error').length === 0, 'Artisanal pizza flow produces 0 errors in validator');
+const parsedPizza = parseVxml(vxmlPizza);
+assert(!parsedPizza.error, 'Parsed artisanal pizza flow VXML without errors');
+
+console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY! VoiceXML 2.1 & SRGS 1.0 verified.');

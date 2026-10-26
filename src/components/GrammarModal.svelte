@@ -35,19 +35,25 @@
   let {
     isOpen = false,
     initialXml = '',
+    fieldNodes = [],
+    selectedFieldNodeId,
     onSave,
     onClose
   }: {
     isOpen: boolean;
     initialXml?: string;
-    onSave: (srgsXml: string) => void;
+    fieldNodes?: Array<{ id: string; label: string; fieldName: string }>;
+    selectedFieldNodeId?: string;
+    onSave: (srgsXml: string, targetDestination?: string) => void;
     onClose: () => void;
   } = $props();
 
   let activeTab = $state<'visual' | 'code' | 'test'>('visual');
   let grammar = $state<SrgsGrammar>(getDefaultSrgsGrammar());
   let xmlText = $state('');
+  let xmlError = $state<string | null>(null);
   let copied = $state(false);
+  let targetDestination = $state<string>('');
 
   // Test phrase state
   let testInput = $state('');
@@ -66,6 +72,7 @@
           try {
             grammar = xmlToSrgs(raw);
             xmlText = raw;
+            xmlError = null;
           } catch {
             grammar = getDefaultSrgsGrammar();
             xmlText = srgsToXml(grammar);
@@ -77,6 +84,15 @@
         testInput = '';
         testResult = null;
         testTargetRule = grammar.root || grammar.rules[0]?.name || '';
+        xmlError = null;
+
+        if (selectedFieldNodeId) {
+          targetDestination = selectedFieldNodeId;
+        } else if (fieldNodes && fieldNodes.length > 0) {
+          targetDestination = fieldNodes[0].id;
+        } else {
+          targetDestination = '__new__';
+        }
       });
     }
     prevIsOpen = currentlyOpen;
@@ -85,20 +101,23 @@
   // Sync visual changes to XML
   function syncToXml() {
     xmlText = srgsToXml(grammar);
+    xmlError = null;
   }
 
   // Sync XML changes to visual
   function syncFromXml() {
     try {
-      grammar = xmlToSrgs(xmlText);
+      const parsed = xmlToSrgs(xmlText);
+      grammar = parsed;
       if (!grammar.rules.some((r) => r.name === grammar.root) && grammar.rules.length > 0) {
         grammar.root = grammar.rules[0].name;
       }
       if (!testTargetRule || !grammar.rules.some((r) => r.name === testTargetRule)) {
         testTargetRule = grammar.root || grammar.rules[0]?.name || '';
       }
-    } catch {
-      // Ignore parse issues while typing
+      xmlError = null;
+    } catch (err: any) {
+      xmlError = err?.message || 'XML syntax error';
     }
   }
 
@@ -154,16 +173,25 @@
     syncToXml();
   }
 
-  function updateRuleName(rule: SrgsRule, newName: string) {
-    const trimmed = newName.trim();
-    if (!trimmed) return;
+  function handleRuleNameInput(rule: SrgsRule, newName: string) {
     const oldName = rule.name;
-    rule.name = trimmed;
-    if (grammar.root === oldName) {
-      grammar.root = trimmed;
-    }
-    if (testTargetRule === oldName) {
-      testTargetRule = trimmed;
+    rule.name = newName;
+    const trimmed = newName.trim();
+    if (trimmed) {
+      if (grammar.root === oldName || !grammar.root) {
+        grammar.root = trimmed;
+      }
+      if (testTargetRule === oldName || !testTargetRule) {
+        testTargetRule = trimmed;
+      }
+      for (const r of grammar.rules) {
+        for (const it of r.items) {
+          if (it.ruleRef === oldName) {
+            it.ruleRef = trimmed;
+            it.phrase = `#${trimmed}`;
+          }
+        }
+      }
     }
     syncToXml();
   }
@@ -194,6 +222,17 @@
     syncToXml();
   }
 
+  function handleItemPhraseInput(item: SrgsItem, val: string) {
+    item.phrase = val;
+    const trimmed = val.trim();
+    if (trimmed.startsWith('#')) {
+      item.ruleRef = trimmed.slice(1).trim();
+    } else {
+      item.ruleRef = undefined;
+    }
+    syncToXml();
+  }
+
   function loadTemplate(tplId: string) {
     const tpl = GRAMMAR_TEMPLATES.find((t) => t.id === tplId);
     if (!tpl) return;
@@ -207,7 +246,9 @@
   }
 
   function copyXml() {
-    syncToXml();
+    if (activeTab === 'visual') {
+      syncToXml();
+    }
     navigator.clipboard.writeText(xmlText);
     copied = true;
     setTimeout(() => {
@@ -216,7 +257,9 @@
   }
 
   function downloadGrxml() {
-    syncToXml();
+    if (activeTab === 'visual') {
+      syncToXml();
+    }
     const blob = new Blob([xmlText], { type: 'application/srgs+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -242,8 +285,12 @@
   }
 
   function handleSaveGrammar() {
-    syncToXml();
-    onSave(xmlText);
+    if (activeTab === 'code') {
+      syncFromXml();
+    } else {
+      syncToXml();
+    }
+    onSave(xmlText, targetDestination);
     onClose();
   }
 </script>
@@ -379,7 +426,7 @@
         {#if activeTab === 'visual'}
           <!-- Visual Builder -->
           <div class="space-y-6">
-            {#each grammar.rules as rule, rIdx}
+            {#each grammar.rules as rule, rIdx (rule.id)}
               <div class="bg-slate-950/70 rounded-xl border border-slate-800 p-4 space-y-3 shadow-sm {grammar.root === rule.name ? 'ring-1 ring-purple-600/40 border-purple-800/60' : ''}">
                 <!-- Rule Header -->
                 <div class="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-slate-800">
@@ -390,8 +437,8 @@
                       <span class="text-slate-400 text-[11px]">Rule ID:</span>
                       <input
                         type="text"
-                        value={rule.name}
-                        oninput={(e) => updateRuleName(rule, e.currentTarget.value)}
+                        bind:value={rule.name}
+                        oninput={(e) => handleRuleNameInput(rule, e.currentTarget.value)}
                         placeholder="RULE_NAME"
                         class="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 font-mono text-xs text-white focus:outline-none focus:border-purple-500"
                       />
@@ -465,13 +512,13 @@
                     <span class="col-span-1 text-right">Action</span>
                   </div>
 
-                  {#each rule.items as item, itIdx}
+                  {#each rule.items as item, itIdx (item.id)}
                     <div class="grid grid-cols-12 gap-2 items-center bg-slate-900/80 p-2 rounded-lg border border-slate-800">
                       <div class="col-span-5 flex items-center gap-1.5">
                         <input
                           type="text"
                           bind:value={item.phrase}
-                          oninput={syncToXml}
+                          oninput={(e) => handleItemPhraseInput(item, e.currentTarget.value)}
                           placeholder="e.g. sales, yes, or #RULE_REF"
                           class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-purple-500 font-mono"
                         />
@@ -480,10 +527,8 @@
                           <select
                             onchange={(e) => {
                               if (e.currentTarget.value) {
-                                item.phrase = `#${e.currentTarget.value}`;
-                                item.ruleRef = e.currentTarget.value;
+                                handleItemPhraseInput(item, `#${e.currentTarget.value}`);
                                 e.currentTarget.value = '';
-                                syncToXml();
                               }
                             }}
                             class="bg-slate-800 border border-slate-700 text-slate-300 text-[10px] rounded px-1 py-1.5 shrink-0 focus:outline-none"
@@ -549,7 +594,15 @@
           <!-- Raw SRGS XML View -->
           <div class="space-y-3">
             <div class="flex items-center justify-between text-xs text-slate-400">
-              <span>Standard W3C SRGS 1.0 XML Markup</span>
+              <div class="flex items-center gap-2">
+                <span>Standard W3C SRGS 1.0 XML Markup</span>
+                {#if xmlError}
+                  <span class="text-rose-400 font-medium text-[11px] flex items-center gap-1">
+                    <AlertCircle class="w-3.5 h-3.5 shrink-0" />
+                    <span>{xmlError}</span>
+                  </span>
+                {/if}
+              </div>
               <div class="flex items-center gap-2">
                 <button
                   onclick={copyXml}
@@ -666,7 +719,7 @@
       </div>
 
       <!-- Modal Footer -->
-      <div class="px-5 py-3 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
+      <div class="px-5 py-3 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
         <div class="text-[11px] text-slate-400 flex items-center gap-2">
           <span>Rules: <strong class="text-slate-200">{grammar.rules.length}</strong></span>
           <span>•</span>
@@ -675,14 +728,36 @@
           <span>Root: <strong class="text-purple-300 font-mono">{grammar.root}</strong></span>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2.5">
+          <label class="flex items-center gap-1.5 text-xs text-slate-400">
+            <span class="text-[11px]">Apply to:</span>
+            <select
+              bind:value={targetDestination}
+              class="bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500 font-medium cursor-pointer"
+            >
+              {#if fieldNodes && fieldNodes.length > 0}
+                <optgroup label="Form Fields on Canvas">
+                  {#each fieldNodes as fn}
+                    <option value={fn.id}>{fn.label} ({fn.fieldName})</option>
+                  {/each}
+                </optgroup>
+              {/if}
+              <optgroup label="Actions">
+                <option value="__new__">+ Create New Field Node on Canvas</option>
+                <option value="__clipboard__">Copy to Clipboard Only</option>
+              </optgroup>
+            </select>
+          </label>
+
           <button
+            type="button"
             onclick={onClose}
             class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
           >
             Cancel
           </button>
           <button
+            type="button"
             onclick={handleSaveGrammar}
             class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
           >

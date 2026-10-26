@@ -45,6 +45,7 @@
   import { autoLayoutNodes } from './lib/vxml/layout';
   import { TEMPLATES } from './lib/templates/templates';
   import { IvrSimulator, type SimulatorState } from './lib/simulator/ivr-engine';
+  import { xmlToSrgs } from './lib/grammar/srgs';
   import type { VxmlDocSettings, VxmlNodeType, FieldNodeData } from './types/vxml';
   import type { ParseResult } from './lib/vxml/parser';
 
@@ -67,24 +68,39 @@
   let showGrammarModal = $state(false);
   let grammarModalXml = $state('');
   let grammarSaveHandler = $state<((xml: string) => void) | null>(null);
+  let lastGrammarXml = $state('');
   let showClerkModal = $state(false);
+
+  let fieldNodes = $derived(
+    nodes
+      .filter((n) => n.type === 'vxml-field')
+      .map((n) => ({
+        id: n.id,
+        label: (n.data as any)?.label || (n.data as any)?.fieldName || n.id,
+        fieldName: (n.data as any)?.fieldName || n.id
+      }))
+  );
 
   onMount(() => {
     auth.init();
   });
 
   function handleOpenGrammarStudio(initialXml: string = '', onSaveCallback?: (xml: string) => void) {
-    if (!onSaveCallback && selectedNode && selectedNode.type === 'vxml-field') {
+    if (onSaveCallback) {
+      grammarModalXml = initialXml;
+      grammarSaveHandler = onSaveCallback;
+    } else if (selectedNode && selectedNode.type === 'vxml-field') {
+      const targetId = selectedNode.id;
       const fieldData = selectedNode.data as FieldNodeData;
-      grammarModalXml = initialXml || fieldData.customGrammar || '';
+      grammarModalXml = initialXml || fieldData.customGrammar || lastGrammarXml || '';
       grammarSaveHandler = (newXml: string) => {
         fieldData.type = 'custom';
         fieldData.customGrammar = newXml;
-        handleUpdateNode(selectedNode!.id, fieldData);
+        handleUpdateNode(targetId, fieldData);
       };
     } else {
-      grammarModalXml = initialXml;
-      grammarSaveHandler = onSaveCallback || null;
+      grammarModalXml = initialXml || lastGrammarXml || '';
+      grammarSaveHandler = null;
     }
     showGrammarModal = true;
   }
@@ -720,7 +736,7 @@
         colorMode="dark"
       >
         <Background gap={18} size={1.2} patternColor="#334155" />
-        <Controls />
+        <Controls position="bottom-left" />
       </SvelteFlow>
 
       <!-- Toast Notification Alert -->
@@ -790,10 +806,63 @@
   <GrammarModal
     isOpen={showGrammarModal}
     initialXml={grammarModalXml}
-    onSave={(newXml) => {
-      if (grammarSaveHandler) {
+    {fieldNodes}
+    selectedFieldNodeId={selectedNode?.type === 'vxml-field' ? selectedNode.id : undefined}
+    onSave={(newXml, targetDestination) => {
+      lastGrammarXml = newXml;
+      if (grammarSaveHandler && (!targetDestination || targetDestination === selectedNode?.id)) {
         grammarSaveHandler(newXml);
         showToast('Grammar applied to field node.');
+      } else if (targetDestination === '__clipboard__') {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(newXml);
+        }
+        showToast('Grammar copied to clipboard.');
+      } else if (targetDestination === '__new__') {
+        const newId = `field_${Math.random().toString(36).substring(2, 6)}`;
+        let rootRule = 'ROOT';
+        try {
+          rootRule = xmlToSrgs(newXml).root || 'ROOT';
+        } catch {}
+        const fieldName = rootRule.toLowerCase();
+        const newFieldData: FieldNodeData = {
+          label: `Field: ${fieldName}`,
+          dialogId: newId,
+          fieldName,
+          type: 'custom',
+          customGrammar: newXml,
+          prompt: {
+            text: `Please speak for ${fieldName}:`,
+            bargein: true
+          },
+          noinputPrompt: 'Please provide an input.',
+          nomatchPrompt: 'Sorry, that was not recognized.'
+        };
+        const newNode: Node = {
+          id: newId,
+          type: 'vxml-field',
+          position: { x: 450, y: (nodes.length * 60) % 400 + 100 },
+          data: newFieldData
+        };
+        nodes = [...nodes, newNode];
+        selectedNode = newNode;
+        showToast(`Created new field "${fieldName}" with custom grammar.`);
+      } else if (targetDestination) {
+        const targetNode = nodes.find((n) => n.id === targetDestination);
+        if (targetNode) {
+          const updatedData = {
+            ...(targetNode.data as FieldNodeData),
+            type: 'custom',
+            customGrammar: newXml
+          };
+          handleUpdateNode(targetNode.id, updatedData);
+          showToast(`Grammar applied to field "${updatedData.fieldName || targetNode.id}".`);
+        } else {
+          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(newXml);
+          }
+          showToast('Grammar copied to clipboard.');
+        }
       } else {
         if (typeof navigator !== 'undefined' && navigator.clipboard) {
           navigator.clipboard.writeText(newXml);

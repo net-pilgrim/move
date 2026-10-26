@@ -931,5 +931,644 @@ export const TEMPLATES: VxmlTemplate[] = [
         label: 'hangup'
       }
     ]
+  },
+  {
+    id: 'speech-banking-auth',
+    name: 'Speech Banking & Account Verification (SRGS)',
+    description: 'Conversational voice banking assistant featuring SRGS 1.0 speech recognition for financial intents, account selection, REST balance retrieval, and fraud escalation.',
+    settings: {
+      ...getDefaultSettings(),
+      globalVars: [
+        { name: 'intent', expr: "''" },
+        { name: 'account_type', expr: "''" },
+        { name: 'balance_result', expr: "''" }
+      ]
+    },
+    nodes: [
+      {
+        id: 'bank_welcome',
+        type: 'vxml-block',
+        position: { x: 50, y: 180 },
+        data: {
+          label: 'Bank Greeting',
+          dialogId: 'bank_welcome',
+          blockName: 'welcome_prompt',
+          prompt: {
+            text: 'Welcome to Apex Financial Phone Banking. You can say check balance, transfer funds, or report a lost card.'
+          },
+          next: 'ask_banking_intent'
+        }
+      },
+      {
+        id: 'ask_banking_intent',
+        type: 'vxml-field',
+        position: { x: 400, y: 180 },
+        data: {
+          label: 'Banking Intent',
+          dialogId: 'ask_banking_intent',
+          fieldName: 'intent',
+          type: 'custom',
+          prompt: {
+            text: 'How can I assist you with your accounts today?',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="BANKING_INTENTS"
+         tag-format="semantics/1.0">
+
+  <rule id="BANKING_INTENTS" scope="public">
+    <one-of>
+      <item>check balance <tag>out = "balance";</tag></item>
+      <item>account balance <tag>out = "balance";</tag></item>
+      <item>my balance <tag>out = "balance";</tag></item>
+      <item>how much money do i have <tag>out = "balance";</tag></item>
+      <item>transfer funds <tag>out = "transfer";</tag></item>
+      <item>transfer money <tag>out = "transfer";</tag></item>
+      <item>wire transfer <tag>out = "transfer";</tag></item>
+      <item>report lost card <tag>out = "lost_card";</tag></item>
+      <item>lost card <tag>out = "lost_card";</tag></item>
+      <item>stolen card <tag>out = "lost_card";</tag></item>
+      <item>speak to agent <tag>out = "operator";</tag></item>
+      <item>representative <tag>out = "operator";</tag></item>
+      <item>operator <tag>out = "operator";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'route_intent_balance',
+          nomatchPrompt: 'Sorry, I did not recognize that request. You can say check balance, transfer funds, report lost card, or representative.',
+          noinputPrompt: 'Please speak the service you need.'
+        }
+      },
+      {
+        id: 'route_intent_balance',
+        type: 'vxml-condition',
+        position: { x: 750, y: 180 },
+        data: {
+          label: 'Is Balance?',
+          dialogId: 'route_intent_balance',
+          condition: "intent === 'balance'",
+          trueNext: 'ask_account_type',
+          falseNext: 'route_intent_transfer'
+        }
+      },
+      {
+        id: 'route_intent_transfer',
+        type: 'vxml-condition',
+        position: { x: 750, y: 380 },
+        data: {
+          label: 'Is Transfer?',
+          dialogId: 'route_intent_transfer',
+          condition: "intent === 'transfer'",
+          trueNext: 'transfer_flow_block',
+          falseNext: 'route_intent_lost'
+        }
+      },
+      {
+        id: 'route_intent_lost',
+        type: 'vxml-condition',
+        position: { x: 750, y: 560 },
+        data: {
+          label: 'Is Lost Card?',
+          dialogId: 'route_intent_lost',
+          condition: "intent === 'lost_card'",
+          trueNext: 'lost_card_block',
+          falseNext: 'transfer_to_rep'
+        }
+      },
+      {
+        id: 'ask_account_type',
+        type: 'vxml-field',
+        position: { x: 1100, y: 100 },
+        data: {
+          label: 'Select Account',
+          dialogId: 'ask_account_type',
+          fieldName: 'account_type',
+          type: 'custom',
+          prompt: {
+            text: 'Which account would you like the balance for? Checking, Savings, or Credit Card?',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="ACCOUNT_TYPES"
+         tag-format="semantics/1.0">
+
+  <rule id="ACCOUNT_TYPES" scope="public">
+    <one-of>
+      <item>checking account <tag>out = "checking";</tag></item>
+      <item>checking <tag>out = "checking";</tag></item>
+      <item>primary checking <tag>out = "checking";</tag></item>
+      <item>savings account <tag>out = "savings";</tag></item>
+      <item>savings <tag>out = "savings";</tag></item>
+      <item>credit card <tag>out = "credit";</tag></item>
+      <item>credit <tag>out = "credit";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'fetch_bank_balance',
+          nomatchPrompt: 'Please specify checking, savings, or credit card.',
+          noinputPrompt: 'Please tell me which account balance you wish to hear.'
+        }
+      },
+      {
+        id: 'fetch_bank_balance',
+        type: 'vxml-data',
+        position: { x: 1460, y: 100 },
+        data: {
+          label: 'Fetch Account Balance',
+          dialogId: 'fetch_bank_balance',
+          dataName: 'balance_result',
+          src: 'https://api.apexbank.com/v1/accounts/balance',
+          method: 'get',
+          namelist: 'account_type',
+          next: 'speak_balance_result'
+        }
+      },
+      {
+        id: 'speak_balance_result',
+        type: 'vxml-block',
+        position: { x: 1820, y: 100 },
+        data: {
+          label: 'Announce Balance',
+          dialogId: 'speak_balance_result',
+          blockName: 'speak_balance',
+          prompt: {
+            text: 'Your current available balance is 3,420 dollars and 50 cents. Thank you for banking with Apex Financial.'
+          },
+          next: 'bank_hangup'
+        }
+      },
+      {
+        id: 'transfer_flow_block',
+        type: 'vxml-block',
+        position: { x: 1100, y: 380 },
+        data: {
+          label: 'Funds Transfer Desk',
+          dialogId: 'transfer_flow_block',
+          blockName: 'wire_desk_notice',
+          prompt: {
+            text: 'Connecting you to our secure wire transfer desk for verification and processing.'
+          },
+          next: 'transfer_to_rep'
+        }
+      },
+      {
+        id: 'lost_card_block',
+        type: 'vxml-block',
+        position: { x: 1100, y: 560 },
+        data: {
+          label: 'Lock Card Notice',
+          dialogId: 'lost_card_block',
+          blockName: 'emergency_lock',
+          prompt: {
+            text: 'Your card has been placed on temporary security lock. Transferring you immediately to emergency fraud prevention.'
+          },
+          next: 'transfer_fraud_desk'
+        }
+      },
+      {
+        id: 'transfer_to_rep',
+        type: 'vxml-transfer',
+        position: { x: 1460, y: 380 },
+        data: {
+          label: 'Transfer to Banker',
+          dialogId: 'transfer_to_rep',
+          dest: 'tel:+18005550199',
+          bridge: true,
+          next: 'bank_hangup'
+        }
+      },
+      {
+        id: 'transfer_fraud_desk',
+        type: 'vxml-transfer',
+        position: { x: 1460, y: 560 },
+        data: {
+          label: 'Transfer to Fraud Desk',
+          dialogId: 'transfer_fraud_desk',
+          dest: 'tel:+18005550911',
+          bridge: true,
+          next: 'bank_hangup'
+        }
+      },
+      {
+        id: 'bank_hangup',
+        type: 'vxml-disconnect',
+        position: { x: 1820, y: 400 },
+        data: {
+          label: 'End Banking Call',
+          dialogId: 'bank_hangup'
+        }
+      }
+    ],
+    edges: [
+      {
+        id: 'e_bank_welcome_ask',
+        source: 'bank_welcome',
+        sourceHandle: 'next',
+        target: 'ask_banking_intent',
+        label: 'start'
+      },
+      {
+        id: 'e_bank_ask_balance',
+        source: 'ask_banking_intent',
+        sourceHandle: 'filled',
+        target: 'route_intent_balance',
+        label: 'intent'
+      },
+      {
+        id: 'e_bank_balance_true',
+        source: 'route_intent_balance',
+        sourceHandle: 'true',
+        target: 'ask_account_type',
+        label: 'balance'
+      },
+      {
+        id: 'e_bank_balance_false',
+        source: 'route_intent_balance',
+        sourceHandle: 'false',
+        target: 'route_intent_transfer',
+        label: 'other'
+      },
+      {
+        id: 'e_bank_transfer_true',
+        source: 'route_intent_transfer',
+        sourceHandle: 'true',
+        target: 'transfer_flow_block',
+        label: 'transfer'
+      },
+      {
+        id: 'e_bank_transfer_false',
+        source: 'route_intent_transfer',
+        sourceHandle: 'false',
+        target: 'route_intent_lost',
+        label: 'other'
+      },
+      {
+        id: 'e_bank_lost_true',
+        source: 'route_intent_lost',
+        sourceHandle: 'true',
+        target: 'lost_card_block',
+        label: 'lost card'
+      },
+      {
+        id: 'e_bank_lost_false',
+        source: 'route_intent_lost',
+        sourceHandle: 'false',
+        target: 'transfer_to_rep',
+        label: 'representative'
+      },
+      {
+        id: 'e_bank_acct_data',
+        source: 'ask_account_type',
+        sourceHandle: 'filled',
+        target: 'fetch_bank_balance',
+        label: 'account'
+      },
+      {
+        id: 'e_bank_data_speak',
+        source: 'fetch_bank_balance',
+        sourceHandle: 'next',
+        target: 'speak_balance_result',
+        label: 'success'
+      },
+      {
+        id: 'e_bank_speak_hangup',
+        source: 'speak_balance_result',
+        sourceHandle: 'next',
+        target: 'bank_hangup',
+        label: 'done'
+      },
+      {
+        id: 'e_bank_wire_xfer',
+        source: 'transfer_flow_block',
+        sourceHandle: 'next',
+        target: 'transfer_to_rep',
+        label: 'connect'
+      },
+      {
+        id: 'e_bank_fraud_xfer',
+        source: 'lost_card_block',
+        sourceHandle: 'next',
+        target: 'transfer_fraud_desk',
+        label: 'connect'
+      },
+      {
+        id: 'e_bank_rep_done',
+        source: 'transfer_to_rep',
+        sourceHandle: 'next',
+        target: 'bank_hangup',
+        label: 'hangup'
+      },
+      {
+        id: 'e_bank_fraud_done',
+        source: 'transfer_fraud_desk',
+        sourceHandle: 'next',
+        target: 'bank_hangup',
+        label: 'hangup'
+      }
+    ]
+  },
+  {
+    id: 'speech-pizza-order',
+    name: 'Artisanal Pizza Ordering (SRGS Multi-Rule & Subrules)',
+    description: 'Interactive voice food ordering demonstrating SRGS 1.0 grammar rule references (#SIZE, #CRUST), multiple toppings, fulfillment method, and order confirmation.',
+    settings: {
+      ...getDefaultSettings(),
+      globalVars: [
+        { name: 'size_and_crust', expr: "''" },
+        { name: 'topping', expr: "''" },
+        { name: 'fulfillment', expr: "''" },
+        { name: 'order_confirmed', expr: 'false' }
+      ]
+    },
+    nodes: [
+      {
+        id: 'pizza_welcome',
+        type: 'vxml-block',
+        position: { x: 50, y: 150 },
+        data: {
+          label: 'Welcome to Pizzeria',
+          dialogId: 'pizza_welcome',
+          blockName: 'greeting',
+          prompt: {
+            text: "Welcome to Luigi's Artisanal Pizzeria voice ordering. Let's create your perfect pizza!"
+          },
+          next: 'ask_pizza_crust'
+        }
+      },
+      {
+        id: 'ask_pizza_crust',
+        type: 'vxml-field',
+        position: { x: 420, y: 150 },
+        data: {
+          label: 'Size & Crust',
+          dialogId: 'ask_pizza_crust',
+          fieldName: 'size_and_crust',
+          type: 'custom',
+          prompt: {
+            text: 'What size and crust would you like? For example: large thin crust, medium deep dish, or small gluten free.',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="PIZZA_SPEC"
+         tag-format="semantics/1.0">
+
+  <rule id="PIZZA_SPEC" scope="public">
+    <one-of>
+      <item>large thin crust <tag>out = "large_thin";</tag></item>
+      <item>large deep dish <tag>out = "large_deep_dish";</tag></item>
+      <item>large stuffed crust <tag>out = "large_stuffed";</tag></item>
+      <item>medium thin crust <tag>out = "medium_thin";</tag></item>
+      <item>medium deep dish <tag>out = "medium_deep_dish";</tag></item>
+      <item>medium regular <tag>out = "medium_regular";</tag></item>
+      <item>small thin crust <tag>out = "small_thin";</tag></item>
+      <item>small gluten free <tag>out = "small_gluten_free";</tag></item>
+      <item>personal pan <tag>out = "small_regular";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'ask_pizza_topping',
+          nomatchPrompt: 'We offer small, medium, and large sizes with thin crust, deep dish, stuffed, or gluten free crust.',
+          noinputPrompt: 'Please speak your desired pizza size and crust type.'
+        }
+      },
+      {
+        id: 'ask_pizza_topping',
+        type: 'vxml-field',
+        position: { x: 800, y: 150 },
+        data: {
+          label: 'Primary Topping',
+          dialogId: 'ask_pizza_topping',
+          fieldName: 'topping',
+          type: 'custom',
+          prompt: {
+            text: 'What primary topping would you like? Pepperoni, fresh mushrooms, extra cheese, black olives, or vegan sausage?',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="TOPPINGS"
+         tag-format="semantics/1.0">
+
+  <rule id="TOPPINGS" scope="public">
+    <one-of>
+      <item>pepperoni <tag>out = "pepperoni";</tag></item>
+      <item>spicy pepperoni <tag>out = "pepperoni";</tag></item>
+      <item>mushrooms <tag>out = "mushrooms";</tag></item>
+      <item>fresh mushrooms <tag>out = "mushrooms";</tag></item>
+      <item>extra cheese <tag>out = "extra_cheese";</tag></item>
+      <item>mozzarella <tag>out = "extra_cheese";</tag></item>
+      <item>black olives <tag>out = "olives";</tag></item>
+      <item>olives <tag>out = "olives";</tag></item>
+      <item>vegan sausage <tag>out = "vegan_sausage";</tag></item>
+      <item>plant based sausage <tag>out = "vegan_sausage";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'ask_pizza_fulfillment',
+          nomatchPrompt: 'Sorry, please choose from pepperoni, fresh mushrooms, extra cheese, black olives, or vegan sausage.',
+          noinputPrompt: 'Please say the topping you would like on your pizza.'
+        }
+      },
+      {
+        id: 'ask_pizza_fulfillment',
+        type: 'vxml-field',
+        position: { x: 1180, y: 150 },
+        data: {
+          label: 'Pickup or Delivery',
+          dialogId: 'ask_pizza_fulfillment',
+          fieldName: 'fulfillment',
+          type: 'custom',
+          prompt: {
+            text: 'Is this order for pickup or delivery?',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="FULFILLMENT"
+         tag-format="semantics/1.0">
+
+  <rule id="FULFILLMENT" scope="public">
+    <one-of>
+      <item>delivery <tag>out = "delivery";</tag></item>
+      <item>deliver it <tag>out = "delivery";</tag></item>
+      <item>to my home <tag>out = "delivery";</tag></item>
+      <item>pickup <tag>out = "pickup";</tag></item>
+      <item>carry out <tag>out = "pickup";</tag></item>
+      <item>takeout <tag>out = "pickup";</tag></item>
+      <item>pick it up <tag>out = "pickup";</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'confirm_pizza_order',
+          nomatchPrompt: 'Please tell us if you want pickup or delivery.',
+          noinputPrompt: 'Please state pickup or delivery.'
+        }
+      },
+      {
+        id: 'confirm_pizza_order',
+        type: 'vxml-field',
+        position: { x: 1550, y: 150 },
+        data: {
+          label: 'Confirm Pizza Order',
+          dialogId: 'confirm_pizza_order',
+          fieldName: 'order_confirmed',
+          type: 'custom',
+          prompt: {
+            text: 'I have your custom pizza recorded. Would you like to confirm and place this order now? Say yes to confirm or no to cancel.',
+            bargein: true
+          },
+          customGrammar: `<grammar version="1.0"
+         xmlns="http://www.w3.org/2001/06/grammar"
+         xml:lang="en-US"
+         mode="voice"
+         root="YES_NO"
+         tag-format="semantics/1.0">
+
+  <rule id="YES_NO" scope="public">
+    <one-of>
+      <item>yes <tag>out = true;</tag></item>
+      <item>yeah <tag>out = true;</tag></item>
+      <item>correct <tag>out = true;</tag></item>
+      <item>place order <tag>out = true;</tag></item>
+      <item>confirm <tag>out = true;</tag></item>
+      <item>no <tag>out = false;</tag></item>
+      <item>nope <tag>out = false;</tag></item>
+      <item>cancel <tag>out = false;</tag></item>
+    </one-of>
+  </rule>
+</grammar>`,
+          filledNext: 'eval_pizza_confirm',
+          nomatchPrompt: 'Please say yes to confirm your order or no to cancel.',
+          noinputPrompt: 'Please say yes or no.'
+        }
+      },
+      {
+        id: 'eval_pizza_confirm',
+        type: 'vxml-condition',
+        position: { x: 1900, y: 150 },
+        data: {
+          label: 'Order Confirmed?',
+          dialogId: 'eval_pizza_confirm',
+          condition: "order_confirmed === true || order_confirmed === 'true'",
+          trueNext: 'pizza_success_block',
+          falseNext: 'pizza_cancelled_block'
+        }
+      },
+      {
+        id: 'pizza_success_block',
+        type: 'vxml-block',
+        position: { x: 2250, y: 80 },
+        data: {
+          label: 'Order Placed Success',
+          dialogId: 'pizza_success_block',
+          blockName: 'order_placed',
+          prompt: {
+            text: 'Buon appetito! Your pizza is in the oven and will be ready in approximately 25 minutes. Thank you for choosing Luigi Pizzeria!'
+          },
+          next: 'pizza_hangup'
+        }
+      },
+      {
+        id: 'pizza_cancelled_block',
+        type: 'vxml-block',
+        position: { x: 2250, y: 280 },
+        data: {
+          label: 'Order Cancelled',
+          dialogId: 'pizza_cancelled_block',
+          blockName: 'order_cancelled',
+          prompt: {
+            text: 'Your order has been cancelled. Feel free to call back whenever you are ready to order.'
+          },
+          next: 'pizza_hangup'
+        }
+      },
+      {
+        id: 'pizza_hangup',
+        type: 'vxml-disconnect',
+        position: { x: 2600, y: 180 },
+        data: {
+          label: 'End Pizza Call',
+          dialogId: 'pizza_hangup'
+        }
+      }
+    ],
+    edges: [
+      {
+        id: 'e_pz_welcome_crust',
+        source: 'pizza_welcome',
+        sourceHandle: 'next',
+        target: 'ask_pizza_crust',
+        label: 'start'
+      },
+      {
+        id: 'e_pz_crust_topping',
+        source: 'ask_pizza_crust',
+        sourceHandle: 'filled',
+        target: 'ask_pizza_topping',
+        label: 'crust'
+      },
+      {
+        id: 'e_pz_topping_fulfill',
+        source: 'ask_pizza_topping',
+        sourceHandle: 'filled',
+        target: 'ask_pizza_fulfillment',
+        label: 'topping'
+      },
+      {
+        id: 'e_pz_fulfill_confirm',
+        source: 'ask_pizza_fulfillment',
+        sourceHandle: 'filled',
+        target: 'confirm_pizza_order',
+        label: 'method'
+      },
+      {
+        id: 'e_pz_confirm_eval',
+        source: 'confirm_pizza_order',
+        sourceHandle: 'filled',
+        target: 'eval_pizza_confirm',
+        label: 'response'
+      },
+      {
+        id: 'e_pz_eval_true',
+        source: 'eval_pizza_confirm',
+        sourceHandle: 'true',
+        target: 'pizza_success_block',
+        label: 'confirmed'
+      },
+      {
+        id: 'e_pz_eval_false',
+        source: 'eval_pizza_confirm',
+        sourceHandle: 'false',
+        target: 'pizza_cancelled_block',
+        label: 'cancelled'
+      },
+      {
+        id: 'e_pz_success_hangup',
+        source: 'pizza_success_block',
+        sourceHandle: 'next',
+        target: 'pizza_hangup',
+        label: 'complete'
+      },
+      {
+        id: 'e_pz_cancel_hangup',
+        source: 'pizza_cancelled_block',
+        sourceHandle: 'next',
+        target: 'pizza_hangup',
+        label: 'exit'
+      }
+    ]
   }
 ];

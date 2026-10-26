@@ -262,8 +262,22 @@
   fill: #818cf8 !important;
 }
 
-/* Edge Link Labels (HTML Badges) */
-.svelte-flow__edge-label {
+/* Edge Link Labels (HTML Badges) & Edge Labels Container */
+.svelte-flow__edge-labels,
+.svelteflow_edge_labels {
+  position: absolute !important;
+  width: 100% !important;
+  height: 100% !important;
+  top: 0 !important;
+  left: 0 !important;
+  pointer-events: none !important;
+  z-index: 10 !important;
+  overflow: visible !important;
+}
+
+.svelte-flow__edge-label,
+.svelteflow_edge_label {
+  position: absolute !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -279,20 +293,26 @@
   border-radius: var(--radius-md) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4) !important;
   cursor: pointer;
+  pointer-events: all !important;
   user-select: none;
   white-space: nowrap;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease !important;
-  z-index: 10;
+  z-index: 10 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-.svelte-flow__edge-label:hover {
+.svelte-flow__edge-label:hover,
+.svelteflow_edge_label:hover {
   background-color: var(--slate-800) !important;
   border-color: var(--indigo-400) !important;
   color: #ffffff !important;
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35), 0 4px 14px rgba(0, 0, 0, 0.7) !important;
 }
 
-.svelte-flow__edge.selected .svelte-flow__edge-label {
+.svelte-flow__edge.selected .svelte-flow__edge-label,
+.svelte-flow__edge-label.selected,
+.svelteflow_edge_label.selected {
   background-color: rgba(30, 27, 75, 0.98) !important;
   border-color: var(--indigo-400) !important;
   color: var(--indigo-100) !important;
@@ -314,25 +334,127 @@
   ry: 4px;
 }
 
+/* Svelte Flow Panels Positioning */
+.svelte-flow__panel,
+.svelteflow_panel {
+  position: absolute !important;
+  z-index: 30 !important;
+  pointer-events: all !important;
+}
+
+.svelte-flow__panel.bottom,
+.svelteflow_panel.bottom {
+  bottom: 16px !important;
+  top: auto !important;
+}
+
+.svelte-flow__panel.top,
+.svelteflow_panel.top {
+  top: 16px !important;
+  bottom: auto !important;
+}
+
+.svelte-flow__panel.left,
+.svelteflow_panel.left {
+  left: 16px !important;
+  right: auto !important;
+}
+
+.svelte-flow__panel.right,
+.svelteflow_panel.right {
+  right: 16px !important;
+  left: auto !important;
+}
+
+.svelte-flow__panel.bottom.left,
+.svelteflow_panel.bottom.left {
+  bottom: 16px !important;
+  left: 16px !important;
+  margin: 0 !important;
+}
+
+.svelte-flow__panel.bottom.right,
+.svelteflow_panel.bottom.right {
+  bottom: 16px !important;
+  right: 16px !important;
+  margin: 0 !important;
+}
+
+.svelte-flow__panel.top.left,
+.svelteflow_panel.top.left {
+  top: 16px !important;
+  left: 16px !important;
+  margin: 0 !important;
+}
+
+.svelte-flow__panel.top.right,
+.svelteflow_panel.top.right {
+  top: 16px !important;
+  right: 16px !important;
+  margin: 0 !important;
+}
+
 /* Canvas Zoom Controls Toolbar */
-.svelte-flow__controls {
+.svelte-flow__controls,
+.svelteflow_controls {
+  position: absolute !important;
+  bottom: 16px !important;
+  left: 16px !important;
+  margin: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   background-color: var(--slate-900) !important;
   border: 1px solid var(--slate-700) !important;
   border-radius: var(--radius-xl) !important;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
-  overflow: hidden;
+  overflow: hidden !important;
   padding: 3px !important;
-  gap: 2px;
-  z-index: 20;
+  gap: 2px !important;
+  z-index: 30 !important;
+  pointer-events: all !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-.svelte-flow__controls.horizontal {
+.svelte-flow__controls.bottom.left,
+.svelteflow_controls.bottom.left {
+  bottom: 16px !important;
+  left: 16px !important;
+  top: auto !important;
+  right: auto !important;
+}
+
+.svelte-flow__controls.bottom.right,
+.svelteflow_controls.bottom.right {
+  bottom: 16px !important;
+  right: 16px !important;
+  top: auto !important;
+  left: auto !important;
+}
+
+.svelte-flow__controls.top.left,
+.svelteflow_controls.top.left {
+  top: 16px !important;
+  left: 16px !important;
+  bottom: auto !important;
+  right: auto !important;
+}
+
+.svelte-flow__controls.top.right,
+.svelteflow_controls.top.right {
+  top: 16px !important;
+  right: 16px !important;
+  bottom: auto !important;
+  left: auto !important;
+}
+
+.svelte-flow__controls.horizontal,
+.svelteflow_controls.horizontal {
   flex-direction: row !important;
 }
 
-.svelte-flow__controls-button {
+.svelte-flow__controls-button,
+.svelteflow_controls_button {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -345,39 +467,47 @@
   background-color: transparent !important;
   color: var(--slate-300) !important;
   cursor: pointer;
+  pointer-events: all !important;
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
-.svelte-flow__controls-button:last-child {
+.svelte-flow__controls-button:last-child,
+.svelteflow_controls_button:last-child {
   border-bottom: none !important;
 }
 
-.svelte-flow__controls.horizontal .svelte-flow__controls-button {
+.svelte-flow__controls.horizontal .svelte-flow__controls-button,
+.svelteflow_controls.horizontal .svelteflow_controls_button {
   border-bottom: none !important;
   border-right: 1px solid rgba(51, 65, 85, 0.6) !important;
 }
 
-.svelte-flow__controls.horizontal .svelte-flow__controls-button:last-child {
+.svelte-flow__controls.horizontal .svelte-flow__controls-button:last-child,
+.svelteflow_controls.horizontal .svelteflow_controls_button:last-child {
   border-right: none !important;
 }
 
-.svelte-flow__controls-button:hover {
+.svelte-flow__controls-button:hover,
+.svelteflow_controls_button:hover {
   background-color: var(--slate-800) !important;
   color: var(--cyan-300) !important;
 }
 
-.svelte-flow__controls-button:active {
+.svelte-flow__controls-button:active,
+.svelteflow_controls_button:active {
   background-color: var(--slate-700) !important;
   transform: scale(0.96);
 }
 
-.svelte-flow__controls-button:disabled {
+.svelte-flow__controls-button:disabled,
+.svelteflow_controls_button:disabled {
   opacity: 0.3 !important;
   cursor: not-allowed;
   pointer-events: none;
 }
 
-.svelte-flow__controls-button svg {
+.svelte-flow__controls-button svg,
+.svelteflow_controls_button svg {
   width: 16px !important;
   height: 16px !important;
   max-width: 16px !important;
