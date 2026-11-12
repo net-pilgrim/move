@@ -1,28 +1,35 @@
 {
   "name": "vxml-editor",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "test": "tsx tests/test-vxml.ts && tsx tests/test-desktop-auth.ts",
+    "tauri": "tauri"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tauri-apps/cli": "^2.12.4",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^24.13.3",
     "@xmldom/xmldom": "^0.9.12",
     "svelte": "^5.57.0",
     "svelte-check": "^4.7.6",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   },
   "dependencies": {
     "@clerk/clerk-js": "^6.39.0",
     "@lucide/svelte": "^1.58.0",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "@tauri-apps/plugin-fs": "^2.7.1",
     "@xyflow/svelte": "^1.7.0"
   }
 }

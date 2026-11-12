@@ -82,12 +82,30 @@ npm run dev
 npm run build
 ```
 
-### 4. Run Test Suite
+### 4. Desktop Application (Tauri)
+Run the desktop app locally:
+```bash
+npm run tauri dev
+```
+
+Build desktop application installers (.deb, .AppImage, .dmg, .msi, .exe):
+```bash
+npm run tauri build
+```
+
+### 5. Feature Flags & Authentication
+Clerk authentication is feature-flagged and disabled by default for desktop and local use. To enable Clerk authentication, copy `.env.example` to `.env` and set:
+```bash
+VITE_ENABLE_AUTH=true
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+```
+
+### 6. Run Test Suite
 ```bash
 npx tsx tests/test-vxml.ts
 ```
 
-### 5. Deploy to Vercel
+### 7. Deploy to Vercel
 
 Deploy directly to Vercel using the official one-click button:
 

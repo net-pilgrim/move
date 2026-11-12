@@ -37,7 +37,12 @@
   import AuthButton from './components/AuthButton.svelte';
   import ClerkConfigModal from './components/ClerkConfigModal.svelte';
   import LoginGate from './components/LoginGate.svelte';
-  import { auth } from './lib/auth/clerk.svelte';
+  import { auth, isAuthFeatureEnabled } from './lib/auth/clerk.svelte';
+  import {
+    openFileWithNativeDialog,
+    saveFileWithNativeDialog,
+    isDesktopApp
+  } from './lib/file-dialogs';
 
   import { generateVxml } from './lib/vxml/generator';
   import { parseVxml } from './lib/vxml/parser';
@@ -414,22 +419,30 @@
     showToast(`Loaded "${t.name}" template.`);
   }
 
-  // Export VoiceXML file
-  function handleExportVxmlFile() {
-    const blob = new Blob([generatedVxml], { type: 'application/voicexml+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'callflow.vxml';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('Exported callflow.vxml successfully.');
+  // Export VoiceXML file with native dialog or browser download
+  async function handleExportVxmlFile() {
+    try {
+      const result = await saveFileWithNativeDialog({
+        defaultPath: 'callflow.vxml',
+        title: 'Export VoiceXML 2.1 File',
+        content: generatedVxml,
+        mimeType: 'application/voicexml+xml;charset=utf-8',
+        filters: [
+          { name: 'VoiceXML (*.vxml)', extensions: ['vxml'] },
+          { name: 'XML (*.xml)', extensions: ['xml'] },
+          { name: 'All Files (*.*)', extensions: ['*'] }
+        ]
+      });
+      if (result) {
+        showToast(`Exported ${result.savedPath}`);
+      }
+    } catch (err: any) {
+      showToast(`Export error: ${err?.message || err}`);
+    }
   }
 
-  // Export JSON project file
-  function handleExportProjectJson() {
+  // Export JSON project file with native dialog or browser download
+  async function handleExportProjectJson() {
     const project = {
       vxmlVersion: '2.1',
       exportedAt: new Date().toISOString(),
@@ -437,26 +450,78 @@
       nodes,
       edges
     };
-    const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'vxml-project.json';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('Exported vxml-project.json.');
-  }
-
-  // Trigger file browser for direct VXML import
-  function handleTriggerImportFile() {
-    if (fileInputRef) {
-      fileInputRef.click();
+    try {
+      const result = await saveFileWithNativeDialog({
+        defaultPath: 'vxml-project.json',
+        title: 'Save VoiceXML Project',
+        content: JSON.stringify(project, null, 2),
+        mimeType: 'application/json',
+        filters: [
+          { name: 'Project JSON (*.json)', extensions: ['json'] },
+          { name: 'All Files (*.*)', extensions: ['*'] }
+        ]
+      });
+      if (result) {
+        showToast(`Saved ${result.savedPath}`);
+      }
+    } catch (err: any) {
+      showToast(`Save error: ${err?.message || err}`);
     }
   }
 
-  // Handle direct file import (.vxml, .xml, .json)
+  // Parse and load content into the canvas
+  function loadDocumentContent(fileName: string, content: string) {
+    if (fileName.endsWith('.json')) {
+      try {
+        const project = JSON.parse(content);
+        if (project.nodes && project.edges) {
+          nodes = project.nodes;
+          edges = project.edges;
+          if (project.docSettings) docSettings = project.docSettings;
+          selectedNode = null;
+          showToast(`Imported project from ${fileName}`);
+          return;
+        }
+      } catch {
+        // Fall through to VXML parser
+      }
+    }
+
+    // VoiceXML parsing
+    const result = parseVxml(content);
+    if (result.error) {
+      alert(`Error parsing VoiceXML: ${result.error}`);
+      return;
+    }
+
+    nodes = result.nodes;
+    edges = result.edges;
+    docSettings = result.settings;
+    selectedNode = null;
+    showToast(`Imported ${result.nodes.length} dialog elements from ${fileName}`);
+  }
+
+  // Trigger native open file dialog (or file input) for direct VXML / project import
+  async function handleTriggerImportFile() {
+    try {
+      const file = await openFileWithNativeDialog({
+        title: 'Open VoiceXML or Project File',
+        filters: [
+          { name: 'VoiceXML & Project (*.vxml, *.xml, *.json)', extensions: ['vxml', 'xml', 'json'] },
+          { name: 'VoiceXML (*.vxml, *.xml)', extensions: ['vxml', 'xml'] },
+          { name: 'Project JSON (*.json)', extensions: ['json'] },
+          { name: 'All Files (*.*)', extensions: ['*'] }
+        ]
+      });
+
+      if (!file) return;
+      loadDocumentContent(file.name, file.content);
+    } catch (err: any) {
+      alert(`Error loading file: ${err?.message || err}`);
+    }
+  }
+
+  // Handle direct file import from fallback HTML input (.vxml, .xml, .json)
   function handleFileSelected(e: Event) {
     const input = e.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
@@ -465,34 +530,7 @@
 
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      if (file.name.endsWith('.json')) {
-        try {
-          const project = JSON.parse(content);
-          if (project.nodes && project.edges) {
-            nodes = project.nodes;
-            edges = project.edges;
-            if (project.docSettings) docSettings = project.docSettings;
-            selectedNode = null;
-            showToast(`Imported project from ${file.name}`);
-            return;
-          }
-        } catch {
-          // Fall through to VXML parser
-        }
-      }
-
-      // VoiceXML parsing
-      const result = parseVxml(content);
-      if (result.error) {
-        alert(`Error parsing VoiceXML: ${result.error}`);
-        return;
-      }
-
-      nodes = result.nodes;
-      edges = result.edges;
-      docSettings = result.settings;
-      selectedNode = null;
-      showToast(`Imported ${result.nodes.length} dialog elements from ${file.name}`);
+      loadDocumentContent(file.name, content);
     };
 
     reader.readAsText(file);
@@ -521,7 +559,7 @@
   }
 </script>
 
-{#if !auth.isLoaded}
+{#if isAuthFeatureEnabled && !auth.isLoaded}
   <!-- Splash Loading Screen while verifying session -->
   <div class="w-screen h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans">
     <div class="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-xl shadow-indigo-950/60 mb-4 animate-pulse">
@@ -532,7 +570,7 @@
       <span>Initializing VoiceXML 2.1 Studio...</span>
     </div>
   </div>
-{:else if !auth.isSignedIn}
+{:else if isAuthFeatureEnabled && !auth.isSignedIn}
   <!-- Login Gate Guard: Entire app is locked until authentication -->
   <LoginGate onOpenConfigModal={() => (showClerkModal = true)} />
   <ClerkConfigModal

@@ -31,6 +31,7 @@
     testGrammarMatch,
     GRAMMAR_TEMPLATES
   } from '../lib/grammar/srgs';
+  import { saveFileWithNativeDialog } from '../lib/file-dialogs';
 
   let {
     isOpen = false,
@@ -256,19 +257,25 @@
     }, 2000);
   }
 
-  function downloadGrxml() {
+  async function downloadGrxml() {
     if (activeTab === 'visual') {
       syncToXml();
     }
-    const blob = new Blob([xmlText], { type: 'application/srgs+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${grammar.root.toLowerCase() || 'grammar'}.grxml`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const defaultName = `${grammar.root.toLowerCase() || 'grammar'}.grxml`;
+    try {
+      await saveFileWithNativeDialog({
+        defaultPath: defaultName,
+        title: 'Export SRGS Grammar File',
+        content: xmlText,
+        mimeType: 'application/srgs+xml;charset=utf-8',
+        filters: [
+          { name: 'SRGS Grammar (*.grxml, *.xml)', extensions: ['grxml', 'xml'] },
+          { name: 'All Files (*.*)', extensions: ['*'] }
+        ]
+      });
+    } catch (err) {
+      console.error('Failed to save grammar file:', err);
+    }
   }
 
   function handleFileUpload(e: Event) {

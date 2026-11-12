@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X, Copy, Download, Check, FileCode, Sparkles } from '@lucide/svelte';
+  import { saveFileWithNativeDialog } from '../lib/file-dialogs';
 
   let {
     isOpen = false,
@@ -21,16 +22,22 @@
     }, 2000);
   }
 
-  function downloadVxml() {
-    const blob = new Blob([vxmlCode], { type: 'application/voicexml+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'callflow.vxml';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  async function downloadVxml() {
+    try {
+      await saveFileWithNativeDialog({
+        defaultPath: 'callflow.vxml',
+        title: 'Export VoiceXML Document',
+        content: vxmlCode,
+        mimeType: 'application/voicexml+xml;charset=utf-8',
+        filters: [
+          { name: 'VoiceXML (*.vxml)', extensions: ['vxml'] },
+          { name: 'XML (*.xml)', extensions: ['xml'] },
+          { name: 'All Files (*.*)', extensions: ['*'] }
+        ]
+      });
+    } catch (err) {
+      console.error('Failed to save VXML file:', err);
+    }
   }
 </script>
 

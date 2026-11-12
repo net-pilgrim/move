@@ -1,6 +1,16 @@
 import { Clerk } from '@clerk/clerk-js';
 import { loadClerkUIScript } from '@clerk/shared/loadClerkJsScript';
 
+/**
+ * Feature flag for Clerk authentication.
+ * Defaults to false (disabled) for desktop applications and local usage.
+ * Set VITE_ENABLE_AUTH=true or VITE_ENABLE_CLERK_AUTH=true in .env to enable.
+ */
+export const isAuthFeatureEnabled = Boolean(
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ENABLE_AUTH === 'true') ||
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ENABLE_CLERK_AUTH === 'true')
+);
+
 export interface UserProfile {
   id: string;
   fullName: string | null;
@@ -12,14 +22,22 @@ export interface UserProfile {
 
 class AuthService {
   private clerkInstance: Clerk | null = null;
-  public isLoaded = $state(false);
+  public isLoaded = $state(!isAuthFeatureEnabled);
   public isConfigured = $state(false);
-  public isSignedIn = $state(false);
+  public isSignedIn = $state(!isAuthFeatureEnabled);
   public user = $state<UserProfile | null>(null);
   public error = $state<string | null>(null);
 
   async init(): Promise<void> {
-    const pubKey = (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined)?.trim();
+    if (!isAuthFeatureEnabled) {
+      this.isLoaded = true;
+      this.isSignedIn = true;
+      this.isConfigured = false;
+      return;
+    }
+
+    const rawKey = import.meta.env?.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
+    const pubKey = rawKey?.trim();
 
     if (!pubKey || pubKey === 'pk_test_replace_with_your_clerk_key' || !pubKey.startsWith('pk_')) {
       // Running in guest/demo mode without Clerk publishable key configured
