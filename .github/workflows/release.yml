@@ -1,0 +1,80 @@
+name: Release Desktop Application
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag/version to release (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+jobs:
+  build-and-release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils libdbus-1-dev libssl-dev
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri Desktop Apps and Publish Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v__VERSION__' }}
+          releaseName: 'VoiceXML 2.1 Editor v__VERSION__'
+          releaseBody: |
+            ## VoiceXML 2.1 Editor v__VERSION__ Desktop Application
+
+            ### Features
+            - Native Desktop Application powered by Tauri
+            - Native system dialogs for opening and saving VoiceXML (.vxml) and Project (.json) files
+            - Optional feature-flagged authentication (Clerk) with default offline/local mode
+            - W3C VoiceXML 2.1 compliant flowchart canvas and SRGS 1.0 Grammar Studio
+            - Interactive IVR Call Simulator
+
+            ### Downloads
+            Download the installer for your operating system below:
+            - **Windows**: `.msi` or `.exe` installer
+            - **macOS**: `.dmg` (Universal / Apple Silicon & Intel)
+            - **Linux**: `.deb` or `.AppImage`
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
