@@ -1,5 +1,6 @@
 {
-  "name": "vxml-editor",
+  "name": "move",
+  "description": "My Own VXML Editor",
   "private": true,
   "version": "0.0.0",
   "type": "module",
