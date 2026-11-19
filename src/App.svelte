@@ -22,7 +22,8 @@
     Check,
     FileUp,
     FolderDown,
-    Save
+    Save,
+    Workflow
   } from '@lucide/svelte';
 
   import { nodeTypes } from './components/nodes';
@@ -46,6 +47,7 @@
   import { TEMPLATES } from './lib/templates/templates';
   import { IvrSimulator, type SimulatorState } from './lib/simulator/ivr-engine';
   import { xmlToSrgs } from './lib/grammar/srgs';
+  import { generateVisioVdx } from './lib/visio/visio-export';
   import type { VxmlDocSettings, VxmlNodeType, FieldNodeData } from './types/vxml';
   import type { ParseResult } from './lib/vxml/parser';
 
@@ -428,6 +430,21 @@
     showToast('Exported callflow.vxml successfully.');
   }
 
+  // Export Microsoft Visio (.vdx) file
+  function handleExportVisioFile() {
+    const vdxContent = generateVisioVdx(nodes, edges, docSettings);
+    const blob = new Blob([vdxContent], { type: 'application/vnd.visio;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'callflow.vdx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Exported callflow.vdx for Microsoft Visio.');
+  }
+
   // Export JSON project file
   function handleExportProjectJson() {
     const project = {
@@ -655,6 +672,16 @@
       >
         <Download class="w-3.5 h-3.5" />
         <span>Export .vxml</span>
+      </button>
+
+      <!-- 1-Click Export Visio (.vdx) Button -->
+      <button
+        onclick={handleExportVisioFile}
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-800/40 hover:border-sky-700 text-xs font-semibold shadow-md transition-colors"
+        title="Export callflow diagram to Microsoft Visio (.vdx)"
+      >
+        <Workflow class="w-3.5 h-3.5 text-sky-400" />
+        <span>Export Visio</span>
       </button>
 
       <!-- SRGS 1.0 Grammar Studio -->

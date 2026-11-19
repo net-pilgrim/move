@@ -38,6 +38,11 @@ Compliant with the **W3C Voice Extensible Markup Language (VoiceXML) Version 2.1
   - Live bi-directional synthesis of W3C-compliant XML markup with proper `version="2.1"` and namespace declarations.
   - One-click copy to clipboard and `.vxml` file export.
 
+- **Microsoft Visio Export (.vdx)**:
+  - 1-Click export to Microsoft Visio XML Drawing (`.vdx` / DatadiagramML) format.
+  - Generates color-coded shapes, decision diamonds, and dynamic glue connectors with labels.
+  - Compatible with Microsoft Visio (all versions), draw.io / diagrams.net, and Lucidchart.
+
 - **VoiceXML 2.1 Specification Validator & Diagnostics**:
   - Live spec compliance diagnostics engine checking:
     - Unique NMTOKEN dialog IDs.
