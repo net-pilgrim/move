@@ -37,7 +37,7 @@
   import AuthButton from './components/AuthButton.svelte';
   import ClerkConfigModal from './components/ClerkConfigModal.svelte';
   import LoginGate from './components/LoginGate.svelte';
-  import { auth } from './lib/auth/clerk.svelte';
+  import { auth, isAuthFeatureEnabled } from './lib/auth/clerk.svelte';
 
   import { generateVxml } from './lib/vxml/generator';
   import { parseVxml } from './lib/vxml/parser';
@@ -521,7 +521,7 @@
   }
 </script>
 
-{#if !auth.isLoaded}
+{#if isAuthFeatureEnabled && !auth.isLoaded}
   <!-- Splash Loading Screen while verifying session -->
   <div class="w-screen h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans">
     <div class="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-xl shadow-indigo-950/60 mb-4 animate-pulse">
@@ -532,7 +532,7 @@
       <span>Initializing VoiceXML 2.1 Studio...</span>
     </div>
   </div>
-{:else if !auth.isSignedIn}
+{:else if isAuthFeatureEnabled && !auth.isSignedIn}
   <!-- Login Gate Guard: Entire app is locked until authentication -->
   <LoginGate onOpenConfigModal={() => (showClerkModal = true)} />
   <ClerkConfigModal

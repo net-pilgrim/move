@@ -87,7 +87,14 @@ npm run build
 npx tsx tests/test-vxml.ts
 ```
 
-### 5. Deploy to Vercel
+### 5. Feature Flags & Authentication
+Clerk authentication is feature-flagged and disabled by default for desktop and local use. To enable Clerk authentication, copy `.env.example` to `.env` and set:
+```bash
+VITE_ENABLE_AUTH=true
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+```
+
+### 6. Deploy to Vercel
 
 Deploy directly to Vercel using the official one-click button:
 
