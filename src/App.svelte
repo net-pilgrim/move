@@ -217,8 +217,35 @@
     selectedNode = node;
   }
 
+  function handleEdgeClick() {
+    selectedNode = null;
+  }
+
   function handlePaneClick() {
     selectedNode = null;
+  }
+
+  async function handleBeforeDelete() {
+    if (showCodeModal || showImportModal || showSettingsModal || showSimulator || showGrammarModal || showClerkModal) {
+      return false;
+    }
+    return true;
+  }
+
+  function handleDeleteElements({ nodes: deletedNodes, edges: deletedEdges }: { nodes: Node[]; edges: Edge[] }) {
+    if (selectedNode && deletedNodes.some((n) => n.id === selectedNode?.id)) {
+      selectedNode = null;
+    }
+    const count = deletedNodes.length + deletedEdges.length;
+    if (count > 0) {
+      if (deletedNodes.length > 0 && deletedEdges.length > 0) {
+        showToast(`Deleted ${deletedNodes.length} node(s) and ${deletedEdges.length} link(s).`);
+      } else if (deletedNodes.length > 0) {
+        showToast(`Deleted ${deletedNodes.length === 1 ? 'node' : `${deletedNodes.length} nodes`}.`);
+      } else {
+        showToast(`Deleted ${deletedEdges.length === 1 ? 'link' : `${deletedEdges.length} links`}.`);
+      }
+    }
   }
 
   function handleUpdateNode(nodeId: string, updatedData: any) {
@@ -252,10 +279,11 @@
       id: newId,
       type: node.type,
       position: { x: node.position.x + 40, y: node.position.y + 40 },
-      data: newData
+      data: newData,
+      selected: true
     };
 
-    nodes = [...nodes, newNode];
+    nodes = [...nodes.map((n) => ({ ...n, selected: false })), newNode];
     selectedNode = newNode;
     showToast(`Duplicated #${node.id} to #${newId}`);
   }
@@ -373,10 +401,11 @@
       id,
       type,
       position: pos,
-      data
+      data,
+      selected: true
     };
 
-    nodes = [...nodes, newNode];
+    nodes = [...nodes.map((n) => ({ ...n, selected: false })), newNode];
     selectedNode = newNode;
   }
 
@@ -532,6 +561,10 @@
   function handleSelectNodeById(nodeId: string) {
     const found = nodes.find((n) => n.id === nodeId);
     if (found) {
+      nodes = nodes.map((n) => ({
+        ...n,
+        selected: n.id === nodeId
+      }));
       selectedNode = found;
       showDiagnostics = false;
     }
@@ -756,8 +789,12 @@
         bind:nodes
         bind:edges
         {nodeTypes}
+        deleteKey={['Delete', 'Backspace']}
+        onbeforedelete={handleBeforeDelete}
+        ondelete={handleDeleteElements}
         onconnect={handleConnect}
         onnodeclick={handleNodeClick}
+        onedgeclick={handleEdgeClick}
         onpaneclick={handlePaneClick}
         fitView
         colorMode="dark"

@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
-    "test": "tsx tests/test-vxml.ts && tsx tests/test-auth-flag.ts && tsx tests/test-visio-export.ts"
+    "test": "tsx tests/test-vxml.ts && tsx tests/test-auth-flag.ts && tsx tests/test-visio-export.ts && tsx tests/test-deletion.ts"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
