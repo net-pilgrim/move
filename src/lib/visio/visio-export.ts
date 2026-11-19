@@ -17,43 +17,103 @@ function escapeXml(str: string): string {
 interface ShapeStyle {
   fillColor: string;
   borderColor: string;
-  textColor: string;
+  titleColor: string;
+  subtitleColor: string;
   isDiamond?: boolean;
   isPill?: boolean;
 }
 
 /**
- * Returns color schemes and shape styles tailored for each VoiceXML node type.
+ * Returns professional, high-contrast, light corporate color schemes
+ * for Microsoft Visio white-canvas diagrams.
  */
 function getNodeStyle(type: string): ShapeStyle {
   switch (type) {
     case 'vxml-menu':
-      return { fillColor: '#1E1B4B', borderColor: '#6366F1', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#EEF2FF', // Very soft indigo tint
+        borderColor: '#4F46E5', // Vibrant indigo border
+        titleColor: '#1E1B4B',
+        subtitleColor: '#4338CA'
+      };
     case 'vxml-field':
-      return { fillColor: '#064E3B', borderColor: '#10B981', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#ECFDF5', // Soft emerald mint
+        borderColor: '#059669', // Emerald green border
+        titleColor: '#064E3B',
+        subtitleColor: '#047857'
+      };
     case 'vxml-block':
-      return { fillColor: '#082F49', borderColor: '#0284C7', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#F0F9FF', // Soft sky blue tint
+        borderColor: '#0284C7', // Ocean sky blue border
+        titleColor: '#082F49',
+        subtitleColor: '#0369A1'
+      };
     case 'vxml-condition':
-      return { fillColor: '#451A03', borderColor: '#F59E0B', textColor: '#FFFFFF', isDiamond: true };
+      return {
+        fillColor: '#FFFBEB', // Soft amber gold tint
+        borderColor: '#D97706', // Warm amber border
+        titleColor: '#78350F',
+        subtitleColor: '#92400E',
+        isDiamond: true
+      };
     case 'vxml-data':
-      return { fillColor: '#3B0764', borderColor: '#A855F7', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#FAF5FF', // Soft purple tint
+        borderColor: '#7E22CE', // Deep purple border
+        titleColor: '#3B0764',
+        subtitleColor: '#6B21A8'
+      };
     case 'vxml-transfer':
-      return { fillColor: '#4C0519', borderColor: '#F43F5E', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#FFF1F2', // Soft rose pink tint
+        borderColor: '#E11D48', // Crimson rose border
+        titleColor: '#4C0519',
+        subtitleColor: '#9F1239'
+      };
     case 'vxml-record':
-      return { fillColor: '#450A0A', borderColor: '#EF4444', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#FEF2F2', // Soft coral red tint
+        borderColor: '#DC2626', // Red border
+        titleColor: '#450A0A',
+        subtitleColor: '#991B1B'
+      };
     case 'vxml-subdialog':
-      return { fillColor: '#2E1065', borderColor: '#8B5CF6', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#F5F3FF', // Soft violet tint
+        borderColor: '#6D28D9', // Deep violet border
+        titleColor: '#2E1065',
+        subtitleColor: '#5B21B6'
+      };
     case 'vxml-disconnect':
-      return { fillColor: '#0F172A', borderColor: '#64748B', textColor: '#E2E8F0', isPill: true };
+      return {
+        fillColor: '#F1F5F9', // Crisp light slate
+        borderColor: '#475569', // Charcoal slate border
+        titleColor: '#0F172A',
+        subtitleColor: '#334155',
+        isPill: true
+      };
     case 'vxml-exit':
-      return { fillColor: '#020617', borderColor: '#475569', textColor: '#E2E8F0', isPill: true };
+      return {
+        fillColor: '#F8FAFC', // Clean off-white
+        borderColor: '#334155', // Dark slate border
+        titleColor: '#020617',
+        subtitleColor: '#1E293B',
+        isPill: true
+      };
     default:
-      return { fillColor: '#1E293B', borderColor: '#475569', textColor: '#FFFFFF' };
+      return {
+        fillColor: '#F8FAFC',
+        borderColor: '#475569',
+        titleColor: '#0F172A',
+        subtitleColor: '#334155'
+      };
   }
 }
 
 /**
- * Extracts a concise human-readable title and subtitle from node data.
+ * Extracts human-readable title and subtitle from node data.
  */
 function getNodeText(node: Node): { title: string; subtitle: string } {
   const d = (node.data || {}) as Record<string, any>;
@@ -95,8 +155,8 @@ function getNodeText(node: Node): { title: string; subtitle: string } {
   }
 
   // Truncate long subtitles for clean Visio diagram display
-  if (subtitle.length > 45) {
-    subtitle = subtitle.substring(0, 42) + '...';
+  if (subtitle.length > 50) {
+    subtitle = subtitle.substring(0, 47) + '...';
   }
 
   return { title: label, subtitle };
@@ -105,6 +165,9 @@ function getNodeText(node: Node): { title: string; subtitle: string } {
 /**
  * Generates an official Microsoft Visio XML Drawing (.vdx / DatadiagramML) file
  * from Svelte Flow nodes and edges.
+ *
+ * Uses light pastel cards, dark high-contrast typography, and explicit 1-D connectors
+ * with high-visibility solid lines, arrowheads, and cardinal snap connection points.
  *
  * Fully compatible with Microsoft Visio 2003/2007/2010/2013/2016/2019/365,
  * draw.io / diagrams.net, and Lucidchart.
@@ -180,7 +243,8 @@ export function generateVisioVdx(
     shapeXmlLines.push('          </XForm>');
     shapeXmlLines.push('          <Line>');
     shapeXmlLines.push(`            <LineColor>${style.borderColor}</LineColor>`);
-    shapeXmlLines.push('            <LineWeight Unit="PT">1.5</LineWeight>');
+    shapeXmlLines.push('            <LineWeight Unit="PT">2.0</LineWeight>');
+    shapeXmlLines.push('            <LinePattern>1</LinePattern>');
     shapeXmlLines.push(`            <Rounding Unit="IN">${roundingIn.toFixed(2)}</Rounding>`);
     shapeXmlLines.push('          </Line>');
     shapeXmlLines.push('          <Fill>');
@@ -192,9 +256,29 @@ export function generateVisioVdx(
     shapeXmlLines.push('            <HorzAlign>1</HorzAlign>');
     shapeXmlLines.push('          </Paragraph>');
     shapeXmlLines.push('          <Character IX="0">');
-    shapeXmlLines.push(`            <Color>${style.textColor}</Color>`);
-    shapeXmlLines.push('            <Size Unit="PT">9</Size>');
+    shapeXmlLines.push('            <Font>1</Font>');
+    shapeXmlLines.push(`            <Color>${style.titleColor}</Color>`);
+    shapeXmlLines.push('            <Size Unit="PT">9.5</Size>');
+    shapeXmlLines.push('            <Style>1</Style>'); // Bold title text
     shapeXmlLines.push('          </Character>');
+
+    // 4 Cardinal Connection Points for smart connector snapping
+    shapeXmlLines.push('          <Connection IX="0">');
+    shapeXmlLines.push('            <X F="Width*0.5">1.2</X>');
+    shapeXmlLines.push('            <Y F="Height*1">1.1</Y>');
+    shapeXmlLines.push('          </Connection>');
+    shapeXmlLines.push('          <Connection IX="1">');
+    shapeXmlLines.push('            <X F="Width*0.5">1.2</X>');
+    shapeXmlLines.push('            <Y F="Height*0">0</Y>');
+    shapeXmlLines.push('          </Connection>');
+    shapeXmlLines.push('          <Connection IX="2">');
+    shapeXmlLines.push('            <X F="Width*0">0</X>');
+    shapeXmlLines.push('            <Y F="Height*0.5">0.55</Y>');
+    shapeXmlLines.push('          </Connection>');
+    shapeXmlLines.push('          <Connection IX="3">');
+    shapeXmlLines.push('            <X F="Width*1">2.4</X>');
+    shapeXmlLines.push('            <Y F="Height*0.5">0.55</Y>');
+    shapeXmlLines.push('          </Connection>');
 
     if (style.isDiamond) {
       // Decision diamond path for conditional branching
@@ -208,7 +292,7 @@ export function generateVisioVdx(
       shapeXmlLines.push('            <LineTo IX="5"><X F="Geometry1.X1">1.2</X><Y F="Geometry1.Y1">1.1</Y></LineTo>');
       shapeXmlLines.push('          </Geom>');
     } else {
-      // Standard rectangular block path
+      // Standard rounded rectangular block path
       shapeXmlLines.push('          <Geom IX="0">');
       shapeXmlLines.push('            <NoFill>0</NoFill>');
       shapeXmlLines.push('            <NoLine>0</NoLine>');
@@ -222,7 +306,7 @@ export function generateVisioVdx(
     shapeXmlLines.push('        </Shape>');
   }
 
-  // Connectors / Edges
+  // 1-D Dynamic Connectors / Directional Edges
   const edgeConnectLines: string[] = [];
 
   for (const edge of edges) {
@@ -247,23 +331,33 @@ export function generateVisioVdx(
     const midY = (y1 + y2) / 2;
     const dx = x2 - x1;
     const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angleRad = Math.atan2(dy, dx);
 
     const edgeLabel = edge.label ? String(edge.label) : (edge.sourceHandle || '');
 
-    shapeXmlLines.push(`        <!-- Connector: ${escapeXml(edge.id)} (${edge.source} -> ${edge.target}) -->`);
+    shapeXmlLines.push(`        <!-- 1-D Dynamic Connector: ${escapeXml(edge.id)} (${edge.source} -> ${edge.target}) -->`);
     shapeXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" LineStyle="3" TextStyle="3">`);
     shapeXmlLines.push('          <XForm>');
-    shapeXmlLines.push(`            <PinX Unit="IN">${midX.toFixed(4)}</PinX>`);
-    shapeXmlLines.push(`            <PinY Unit="IN">${midY.toFixed(4)}</PinY>`);
-    shapeXmlLines.push(`            <Width Unit="IN">${Math.abs(dx).toFixed(4)}</Width>`);
-    shapeXmlLines.push(`            <Height Unit="IN">${Math.abs(dy).toFixed(4)}</Height>`);
-    shapeXmlLines.push('            <LocPinX F="Width*0.5">0</LocPinX>');
+    shapeXmlLines.push(`            <PinX F="(BeginX+EndX)/2">${midX.toFixed(4)}</PinX>`);
+    shapeXmlLines.push(`            <PinY F="(BeginY+EndY)/2">${midY.toFixed(4)}</PinY>`);
+    shapeXmlLines.push(`            <Width F="SQRT((EndX-BeginX)^2+(EndY-BeginY)^2)">${length.toFixed(4)}</Width>`);
+    shapeXmlLines.push('            <Height Unit="IN">0</Height>');
+    shapeXmlLines.push(`            <LocPinX F="Width*0.5">${(length / 2).toFixed(4)}</LocPinX>`);
     shapeXmlLines.push('            <LocPinY F="Height*0.5">0</LocPinY>');
+    shapeXmlLines.push(`            <Angle F="ATAN2(EndY-BeginY,EndX-BeginX)">${angleRad.toFixed(4)}</Angle>`);
     shapeXmlLines.push('          </XForm>');
+    shapeXmlLines.push('          <XForm1D>');
+    shapeXmlLines.push(`            <BeginX Unit="IN">${x1.toFixed(4)}</BeginX>`);
+    shapeXmlLines.push(`            <BeginY Unit="IN">${y1.toFixed(4)}</BeginY>`);
+    shapeXmlLines.push(`            <EndX Unit="IN">${x2.toFixed(4)}</EndX>`);
+    shapeXmlLines.push(`            <EndY Unit="IN">${y2.toFixed(4)}</EndY>`);
+    shapeXmlLines.push('          </XForm1D>');
     shapeXmlLines.push('          <Line>');
-    shapeXmlLines.push('            <LineColor>#818CF8</LineColor>');
-    shapeXmlLines.push('            <LineWeight Unit="PT">1.5</LineWeight>');
-    shapeXmlLines.push('            <EndArrow>4</EndArrow>'); // 4 = Standard arrowhead in Visio
+    shapeXmlLines.push('            <LineColor>#334155</LineColor>'); // High-contrast dark slate (Slate-700)
+    shapeXmlLines.push('            <LineWeight Unit="PT">2.0</LineWeight>'); // Crisp 2pt thickness
+    shapeXmlLines.push('            <LinePattern>1</LinePattern>'); // Solid line
+    shapeXmlLines.push('            <EndArrow>4</EndArrow>'); // 4 = Standard filled arrowhead in Visio
     shapeXmlLines.push('            <EndArrowSize>2</EndArrowSize>');
     shapeXmlLines.push('          </Line>');
     if (edgeLabel) {
@@ -272,14 +366,18 @@ export function generateVisioVdx(
       shapeXmlLines.push('            <HorzAlign>1</HorzAlign>');
       shapeXmlLines.push('          </Paragraph>');
       shapeXmlLines.push('          <Character IX="0">');
-      shapeXmlLines.push('            <Color>#C7D2FE</Color>');
-      shapeXmlLines.push('            <Size Unit="PT">8</Size>');
+      shapeXmlLines.push('            <Font>1</Font>');
+      shapeXmlLines.push('            <Color>#0F172A</Color>'); // Dark, readable text
+      shapeXmlLines.push('            <Size Unit="PT">8.5</Size>');
+      shapeXmlLines.push('            <Style>1</Style>'); // Bold
       shapeXmlLines.push('          </Character>');
     }
     shapeXmlLines.push('          <Geom IX="0">');
     shapeXmlLines.push('            <NoFill>1</NoFill>');
+    shapeXmlLines.push('            <NoLine>0</NoLine>');
+    shapeXmlLines.push('            <NoShow>0</NoShow>');
     shapeXmlLines.push('            <MoveTo IX="1"><X>0</X><Y>0</Y></MoveTo>');
-    shapeXmlLines.push(`            <LineTo IX="2"><X F="Width*1">${dx.toFixed(4)}</X><Y F="Height*1">${dy.toFixed(4)}</Y></LineTo>`);
+    shapeXmlLines.push(`            <LineTo IX="2"><X F="Width*1">${length.toFixed(4)}</X><Y>0</Y></LineTo>`);
     shapeXmlLines.push('          </Geom>');
     shapeXmlLines.push('        </Shape>');
 
