@@ -155,8 +155,8 @@ function getNodeText(node: Node): { title: string; subtitle: string } {
   }
 
   // Truncate long subtitles for clean Visio diagram display
-  if (subtitle.length > 50) {
-    subtitle = subtitle.substring(0, 47) + '...';
+  if (subtitle.length > 40) {
+    subtitle = subtitle.substring(0, 37) + '...';
   }
 
   return { title: label, subtitle };
@@ -166,8 +166,9 @@ function getNodeText(node: Node): { title: string; subtitle: string } {
  * Generates an official Microsoft Visio XML Drawing (.vdx / DatadiagramML) file
  * from Svelte Flow nodes and edges.
  *
- * Uses light pastel cards, dark high-contrast typography, and explicit 1-D connectors
- * with high-visibility solid lines, arrowheads, and cardinal snap connection points.
+ * Uses compact proportional boxes, standard 1pt stroke weights (stored in inches
+ * to avoid Visio unit misinterpretation), fine-tipped arrowheads, and non-overlapping
+ * layout scaling.
  *
  * Fully compatible with Microsoft Visio 2003/2007/2010/2013/2016/2019/365,
  * draw.io / diagrams.net, and Lucidchart.
@@ -177,11 +178,19 @@ export function generateVisioVdx(
   edges: Edge[],
   docSettings?: VxmlDocSettings
 ): string {
-  // Scale factor: 96 pixels per inch
-  const DPI = 96;
-  const nodeWidthIn = 2.4;
-  const nodeHeightIn = 1.1;
-  const marginIn = 1.0;
+  // Proportional flowchart dimensions (in inches)
+  const defaultNodeWidth = 1.7; // Compact width
+  const defaultNodeHeight = 0.72; // Compact height
+  const diamondWidth = 1.45;
+  const diamondHeight = 0.85;
+  const marginIn = 0.8;
+
+  // Standard line weights in inches:
+  // In Visio DatadiagramML, raw numbers are interpreted as INCHES.
+  // 1 pt = 1/72 inch ≈ 0.0138889 inches.
+  // 0.75 pt ≈ 0.0104167 inches.
+  const BORDER_WEIGHT_IN = '0.0138889'; // 1 pt border
+  const CONNECTOR_WEIGHT_IN = '0.0125000'; // ~0.9 pt connector stroke
 
   // Compute bounding box
   let minX = Infinity;
@@ -203,8 +212,12 @@ export function generateVisioVdx(
     }
   }
 
-  const contentWidthIn = Math.max((maxX - minX) / DPI + nodeWidthIn, 8);
-  const contentHeightIn = Math.max((maxY - minY) / DPI + nodeHeightIn, 6);
+  // Scale factor: 120 canvas pixels = 1.0 inch in Visio
+  // This provides generous spacing between nodes and prevents box overlap.
+  const DPI = 120;
+
+  const contentWidthIn = Math.max((maxX - minX) / DPI + defaultNodeWidth, 8.5);
+  const contentHeightIn = Math.max((maxY - minY) / DPI + defaultNodeHeight, 6.0);
 
   const pageWidthIn = Math.max(11.0, contentWidthIn + marginIn * 2);
   const pageHeightIn = Math.max(8.5, contentHeightIn + marginIn * 2);
@@ -223,29 +236,32 @@ export function generateVisioVdx(
     const style = getNodeStyle(node.type || 'vxml-block');
     const { title, subtitle } = getNodeText(node);
 
-    // Coordinate conversion: Visio Y axis starts from bottom-left
-    const xIn = (node.position.x - minX) / DPI + marginIn + nodeWidthIn / 2;
-    const yIn = pageHeightIn - ((node.position.y - minY) / DPI + marginIn + nodeHeightIn / 2);
+    const wIn = style.isDiamond ? diamondWidth : defaultNodeWidth;
+    const hIn = style.isDiamond ? diamondHeight : defaultNodeHeight;
 
-    const roundingIn = style.isPill ? 0.45 : 0.08;
+    // Coordinate conversion: Visio Y axis starts from bottom-left
+    const xIn = (node.position.x - minX) / DPI + marginIn + wIn / 2;
+    const yIn = pageHeightIn - ((node.position.y - minY) / DPI + marginIn + hIn / 2);
+
+    const roundingIn = style.isPill ? 0.35 : 0.04;
     const combinedText = subtitle ? `${title}&#x0A;${subtitle}` : title;
 
     shapeXmlLines.push(`        <!-- Node: ${escapeXml(node.id)} -->`);
     shapeXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" LineStyle="3" FillStyle="3" TextStyle="3">`);
     shapeXmlLines.push('          <XForm>');
-    shapeXmlLines.push(`            <PinX Unit="IN">${xIn.toFixed(4)}</PinX>`);
-    shapeXmlLines.push(`            <PinY Unit="IN">${yIn.toFixed(4)}</PinY>`);
-    shapeXmlLines.push(`            <Width Unit="IN">${nodeWidthIn.toFixed(4)}</Width>`);
-    shapeXmlLines.push(`            <Height Unit="IN">${nodeHeightIn.toFixed(4)}</Height>`);
-    shapeXmlLines.push('            <LocPinX F="Width*0.5">1.2</LocPinX>');
-    shapeXmlLines.push('            <LocPinY F="Height*0.5">0.55</LocPinY>');
+    shapeXmlLines.push(`            <PinX>${xIn.toFixed(4)}</PinX>`);
+    shapeXmlLines.push(`            <PinY>${yIn.toFixed(4)}</PinY>`);
+    shapeXmlLines.push(`            <Width>${wIn.toFixed(4)}</Width>`);
+    shapeXmlLines.push(`            <Height>${hIn.toFixed(4)}</Height>`);
+    shapeXmlLines.push(`            <LocPinX F="Width*0.5">${(wIn / 2).toFixed(4)}</LocPinX>`);
+    shapeXmlLines.push(`            <LocPinY F="Height*0.5">${(hIn / 2).toFixed(4)}</LocPinY>`);
     shapeXmlLines.push('            <Angle>0</Angle>');
     shapeXmlLines.push('          </XForm>');
     shapeXmlLines.push('          <Line>');
     shapeXmlLines.push(`            <LineColor>${style.borderColor}</LineColor>`);
-    shapeXmlLines.push('            <LineWeight Unit="PT">2.0</LineWeight>');
+    shapeXmlLines.push(`            <LineWeight>${BORDER_WEIGHT_IN}</LineWeight>`);
     shapeXmlLines.push('            <LinePattern>1</LinePattern>');
-    shapeXmlLines.push(`            <Rounding Unit="IN">${roundingIn.toFixed(2)}</Rounding>`);
+    shapeXmlLines.push(`            <Rounding>${roundingIn.toFixed(2)}</Rounding>`);
     shapeXmlLines.push('          </Line>');
     shapeXmlLines.push('          <Fill>');
     shapeXmlLines.push(`            <FillForegnd>${style.fillColor}</FillForegnd>`);
@@ -258,38 +274,40 @@ export function generateVisioVdx(
     shapeXmlLines.push('          <Character IX="0">');
     shapeXmlLines.push('            <Font>1</Font>');
     shapeXmlLines.push(`            <Color>${style.titleColor}</Color>`);
-    shapeXmlLines.push('            <Size Unit="PT">9.5</Size>');
+    shapeXmlLines.push('            <Size Unit="PT">8.5</Size>');
     shapeXmlLines.push('            <Style>1</Style>'); // Bold title text
     shapeXmlLines.push('          </Character>');
 
     // 4 Cardinal Connection Points for smart connector snapping
     shapeXmlLines.push('          <Connection IX="0">');
-    shapeXmlLines.push('            <X F="Width*0.5">1.2</X>');
-    shapeXmlLines.push('            <Y F="Height*1">1.1</Y>');
+    shapeXmlLines.push(`            <X F="Width*0.5">${(wIn / 2).toFixed(4)}</X>`);
+    shapeXmlLines.push(`            <Y F="Height*1">${hIn.toFixed(4)}</Y>`);
     shapeXmlLines.push('          </Connection>');
     shapeXmlLines.push('          <Connection IX="1">');
-    shapeXmlLines.push('            <X F="Width*0.5">1.2</X>');
+    shapeXmlLines.push(`            <X F="Width*0.5">${(wIn / 2).toFixed(4)}</X>`);
     shapeXmlLines.push('            <Y F="Height*0">0</Y>');
     shapeXmlLines.push('          </Connection>');
     shapeXmlLines.push('          <Connection IX="2">');
     shapeXmlLines.push('            <X F="Width*0">0</X>');
-    shapeXmlLines.push('            <Y F="Height*0.5">0.55</Y>');
+    shapeXmlLines.push(`            <Y F="Height*0.5">${(hIn / 2).toFixed(4)}</Y>`);
     shapeXmlLines.push('          </Connection>');
     shapeXmlLines.push('          <Connection IX="3">');
-    shapeXmlLines.push('            <X F="Width*1">2.4</X>');
-    shapeXmlLines.push('            <Y F="Height*0.5">0.55</Y>');
+    shapeXmlLines.push(`            <X F="Width*1">${wIn.toFixed(4)}</X>`);
+    shapeXmlLines.push(`            <Y F="Height*0.5">${(hIn / 2).toFixed(4)}</Y>`);
     shapeXmlLines.push('          </Connection>');
 
     if (style.isDiamond) {
       // Decision diamond path for conditional branching
+      const halfW = (wIn / 2).toFixed(4);
+      const halfH = (hIn / 2).toFixed(4);
       shapeXmlLines.push('          <Geom IX="0">');
       shapeXmlLines.push('            <NoFill>0</NoFill>');
       shapeXmlLines.push('            <NoLine>0</NoLine>');
-      shapeXmlLines.push('            <MoveTo IX="1"><X F="Width*0.5">1.2</X><Y F="Height*1">1.1</Y></MoveTo>');
-      shapeXmlLines.push('            <LineTo IX="2"><X F="Width*1">2.4</X><Y F="Height*0.5">0.55</Y></LineTo>');
-      shapeXmlLines.push('            <LineTo IX="3"><X F="Width*0.5">1.2</X><Y F="Height*0">0</Y></LineTo>');
-      shapeXmlLines.push('            <LineTo IX="4"><X F="Width*0">0</X><Y F="Height*0.5">0.55</Y></LineTo>');
-      shapeXmlLines.push('            <LineTo IX="5"><X F="Geometry1.X1">1.2</X><Y F="Geometry1.Y1">1.1</Y></LineTo>');
+      shapeXmlLines.push(`            <MoveTo IX="1"><X F="Width*0.5">${halfW}</X><Y F="Height*1">${hIn.toFixed(4)}</Y></MoveTo>`);
+      shapeXmlLines.push(`            <LineTo IX="2"><X F="Width*1">${wIn.toFixed(4)}</X><Y F="Height*0.5">${halfH}</Y></LineTo>`);
+      shapeXmlLines.push(`            <LineTo IX="3"><X F="Width*0.5">${halfW}</X><Y F="Height*0">0</Y></LineTo>`);
+      shapeXmlLines.push(`            <LineTo IX="4"><X F="Width*0">0</X><Y F="Height*0.5">${halfH}</Y></LineTo>`);
+      shapeXmlLines.push(`            <LineTo IX="5"><X F="Geometry1.X1">${halfW}</X><Y F="Geometry1.Y1">${hIn.toFixed(4)}</Y></LineTo>`);
       shapeXmlLines.push('          </Geom>');
     } else {
       // Standard rounded rectangular block path
@@ -297,9 +315,9 @@ export function generateVisioVdx(
       shapeXmlLines.push('            <NoFill>0</NoFill>');
       shapeXmlLines.push('            <NoLine>0</NoLine>');
       shapeXmlLines.push('            <MoveTo IX="1"><X F="Width*0">0</X><Y F="Height*0">0</Y></MoveTo>');
-      shapeXmlLines.push('            <LineTo IX="2"><X F="Width*1">2.4</X><Y F="Height*0">0</Y></LineTo>');
-      shapeXmlLines.push('            <LineTo IX="3"><X F="Width*1">2.4</X><Y F="Height*1">1.1</Y></LineTo>');
-      shapeXmlLines.push('            <LineTo IX="4"><X F="Width*0">0</X><Y F="Height*1">1.1</Y></LineTo>');
+      shapeXmlLines.push(`            <LineTo IX="2"><X F="Width*1">${wIn.toFixed(4)}</X><Y F="Height*0">0</Y></LineTo>`);
+      shapeXmlLines.push(`            <LineTo IX="3"><X F="Width*1">${wIn.toFixed(4)}</X><Y F="Height*1">${hIn.toFixed(4)}</Y></LineTo>`);
+      shapeXmlLines.push(`            <LineTo IX="4"><X F="Width*0">0</X><Y F="Height*1">${hIn.toFixed(4)}</Y></LineTo>`);
       shapeXmlLines.push('            <LineTo IX="5"><X F="Geometry1.X1">0</X><Y F="Geometry1.Y1">0</Y></LineTo>');
       shapeXmlLines.push('          </Geom>');
     }
@@ -322,10 +340,18 @@ export function generateVisioVdx(
 
     const shapeId = currentShapeId++;
 
-    const x1 = (sourceNode.position.x - minX) / DPI + marginIn + nodeWidthIn / 2;
-    const y1 = pageHeightIn - ((sourceNode.position.y - minY) / DPI + marginIn + nodeHeightIn / 2);
-    const x2 = (targetNode.position.x - minX) / DPI + marginIn + nodeWidthIn / 2;
-    const y2 = pageHeightIn - ((targetNode.position.y - minY) / DPI + marginIn + nodeHeightIn / 2);
+    const sourceStyle = getNodeStyle(sourceNode.type || 'vxml-block');
+    const targetStyle = getNodeStyle(targetNode.type || 'vxml-block');
+
+    const swIn = sourceStyle.isDiamond ? diamondWidth : defaultNodeWidth;
+    const shIn = sourceStyle.isDiamond ? diamondHeight : defaultNodeHeight;
+    const twIn = targetStyle.isDiamond ? diamondWidth : defaultNodeWidth;
+    const thIn = targetStyle.isDiamond ? diamondHeight : defaultNodeHeight;
+
+    const x1 = (sourceNode.position.x - minX) / DPI + marginIn + swIn / 2;
+    const y1 = pageHeightIn - ((sourceNode.position.y - minY) / DPI + marginIn + shIn / 2);
+    const x2 = (targetNode.position.x - minX) / DPI + marginIn + twIn / 2;
+    const y2 = pageHeightIn - ((targetNode.position.y - minY) / DPI + marginIn + thIn / 2);
 
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
@@ -342,23 +368,23 @@ export function generateVisioVdx(
     shapeXmlLines.push(`            <PinX F="(BeginX+EndX)/2">${midX.toFixed(4)}</PinX>`);
     shapeXmlLines.push(`            <PinY F="(BeginY+EndY)/2">${midY.toFixed(4)}</PinY>`);
     shapeXmlLines.push(`            <Width F="SQRT((EndX-BeginX)^2+(EndY-BeginY)^2)">${length.toFixed(4)}</Width>`);
-    shapeXmlLines.push('            <Height Unit="IN">0</Height>');
+    shapeXmlLines.push('            <Height>0</Height>');
     shapeXmlLines.push(`            <LocPinX F="Width*0.5">${(length / 2).toFixed(4)}</LocPinX>`);
     shapeXmlLines.push('            <LocPinY F="Height*0.5">0</LocPinY>');
     shapeXmlLines.push(`            <Angle F="ATAN2(EndY-BeginY,EndX-BeginX)">${angleRad.toFixed(4)}</Angle>`);
     shapeXmlLines.push('          </XForm>');
     shapeXmlLines.push('          <XForm1D>');
-    shapeXmlLines.push(`            <BeginX Unit="IN">${x1.toFixed(4)}</BeginX>`);
-    shapeXmlLines.push(`            <BeginY Unit="IN">${y1.toFixed(4)}</BeginY>`);
-    shapeXmlLines.push(`            <EndX Unit="IN">${x2.toFixed(4)}</EndX>`);
-    shapeXmlLines.push(`            <EndY Unit="IN">${y2.toFixed(4)}</EndY>`);
+    shapeXmlLines.push(`            <BeginX>${x1.toFixed(4)}</BeginX>`);
+    shapeXmlLines.push(`            <BeginY>${y1.toFixed(4)}</BeginY>`);
+    shapeXmlLines.push(`            <EndX>${x2.toFixed(4)}</EndX>`);
+    shapeXmlLines.push(`            <EndY>${y2.toFixed(4)}</EndY>`);
     shapeXmlLines.push('          </XForm1D>');
     shapeXmlLines.push('          <Line>');
-    shapeXmlLines.push('            <LineColor>#334155</LineColor>'); // High-contrast dark slate (Slate-700)
-    shapeXmlLines.push('            <LineWeight Unit="PT">2.0</LineWeight>'); // Crisp 2pt thickness
-    shapeXmlLines.push('            <LinePattern>1</LinePattern>'); // Solid line
-    shapeXmlLines.push('            <EndArrow>4</EndArrow>'); // 4 = Standard filled arrowhead in Visio
-    shapeXmlLines.push('            <EndArrowSize>2</EndArrowSize>');
+    shapeXmlLines.push('            <LineColor>#334155</LineColor>'); // Slate-700
+    shapeXmlLines.push(`            <LineWeight>${CONNECTOR_WEIGHT_IN}</LineWeight>`); // Clean ~0.9pt stroke
+    shapeXmlLines.push('            <LinePattern>1</LinePattern>');
+    shapeXmlLines.push('            <EndArrow>4</EndArrow>'); // Standard clean arrowhead
+    shapeXmlLines.push('            <EndArrowSize>1</EndArrowSize>'); // 1 = Small neat arrow
     shapeXmlLines.push('          </Line>');
     if (edgeLabel) {
       shapeXmlLines.push(`          <Text><cp IX="0"/><pp IX="0"/>${escapeXml(edgeLabel)}</Text>`);
@@ -367,9 +393,9 @@ export function generateVisioVdx(
       shapeXmlLines.push('          </Paragraph>');
       shapeXmlLines.push('          <Character IX="0">');
       shapeXmlLines.push('            <Font>1</Font>');
-      shapeXmlLines.push('            <Color>#0F172A</Color>'); // Dark, readable text
-      shapeXmlLines.push('            <Size Unit="PT">8.5</Size>');
-      shapeXmlLines.push('            <Style>1</Style>'); // Bold
+      shapeXmlLines.push('            <Color>#1E293B</Color>');
+      shapeXmlLines.push('            <Size Unit="PT">7.5</Size>');
+      shapeXmlLines.push('            <Style>1</Style>');
       shapeXmlLines.push('          </Character>');
     }
     shapeXmlLines.push('          <Geom IX="0">');
