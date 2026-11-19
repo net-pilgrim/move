@@ -162,13 +162,61 @@ function getNodeText(node: Node): { title: string; subtitle: string } {
   return { title: label, subtitle };
 }
 
+interface PortInfo {
+  x: number;
+  y: number;
+  connIdx: number; // 0: Top, 1: Bottom, 2: Left, 3: Right
+}
+
+/**
+ * Calculates the exact boundary exit or entry port for a shape based on the relative
+ * direction to the other shape, ensuring connectors start and end cleanly on the shape perimeter.
+ */
+function getBestConnectionPort(
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  otherCx: number,
+  otherCy: number,
+  isSource: boolean
+): PortInfo {
+  const dx = otherCx - cx;
+  const dy = otherCy - cy; // Visio Y coordinates (upwards)
+
+  if (Math.abs(dx) >= Math.abs(dy) * 0.5) {
+    if (dx >= 0) {
+      // Other shape is to the right
+      return isSource
+        ? { x: cx + w / 2, y: cy, connIdx: 3 } // Exit Right
+        : { x: cx - w / 2, y: cy, connIdx: 2 }; // Enter Left
+    } else {
+      // Other shape is to the left
+      return isSource
+        ? { x: cx - w / 2, y: cy, connIdx: 2 } // Exit Left
+        : { x: cx + w / 2, y: cy, connIdx: 3 }; // Enter Right
+    }
+  } else {
+    if (dy >= 0) {
+      // Other shape is above
+      return isSource
+        ? { x: cx, y: cy + h / 2, connIdx: 0 } // Exit Top
+        : { x: cx, y: cy - h / 2, connIdx: 1 }; // Enter Bottom
+    } else {
+      // Other shape is below
+      return isSource
+        ? { x: cx, y: cy - h / 2, connIdx: 1 } // Exit Bottom
+        : { x: cx, y: cy + h / 2, connIdx: 0 }; // Enter Top
+    }
+  }
+}
+
 /**
  * Generates an official Microsoft Visio XML Drawing (.vdx / DatadiagramML) file
  * from Svelte Flow nodes and edges.
  *
- * Uses compact proportional boxes, standard 1pt stroke weights (stored in inches
- * to avoid Visio unit misinterpretation), fine-tipped arrowheads, and non-overlapping
- * layout scaling.
+ * Connectors start and end cleanly on the shape perimeter (never at the center),
+ * with standard 1pt stroke weights, fine arrowheads, and non-overlapping layout.
  *
  * Fully compatible with Microsoft Visio 2003/2007/2010/2013/2016/2019/365,
  * draw.io / diagrams.net, and Lucidchart.
@@ -188,7 +236,6 @@ export function generateVisioVdx(
   // Standard line weights in inches:
   // In Visio DatadiagramML, raw numbers are interpreted as INCHES.
   // 1 pt = 1/72 inch ≈ 0.0138889 inches.
-  // 0.75 pt ≈ 0.0104167 inches.
   const BORDER_WEIGHT_IN = '0.0138889'; // 1 pt border
   const CONNECTOR_WEIGHT_IN = '0.0125000'; // ~0.9 pt connector stroke
 
@@ -213,7 +260,6 @@ export function generateVisioVdx(
   }
 
   // Scale factor: 120 canvas pixels = 1.0 inch in Visio
-  // This provides generous spacing between nodes and prevents box overlap.
   const DPI = 120;
 
   const contentWidthIn = Math.max((maxX - minX) / DPI + defaultNodeWidth, 8.5);
@@ -222,8 +268,9 @@ export function generateVisioVdx(
   const pageWidthIn = Math.max(11.0, contentWidthIn + marginIn * 2);
   const pageHeightIn = Math.max(8.5, contentHeightIn + marginIn * 2);
 
-  // Map node IDs to Visio 1-based shape IDs
+  // Map node IDs to Visio 1-based shape IDs and computed centers
   const nodeShapeIdMap = new Map<string, number>();
+  const nodeCenterMap = new Map<string, { cx: number; cy: number; w: number; h: number }>();
   let currentShapeId = 1;
 
   const shapeXmlLines: string[] = [];
@@ -240,8 +287,10 @@ export function generateVisioVdx(
     const hIn = style.isDiamond ? diamondHeight : defaultNodeHeight;
 
     // Coordinate conversion: Visio Y axis starts from bottom-left
-    const xIn = (node.position.x - minX) / DPI + marginIn + wIn / 2;
-    const yIn = pageHeightIn - ((node.position.y - minY) / DPI + marginIn + hIn / 2);
+    const cx = (node.position.x - minX) / DPI + marginIn + wIn / 2;
+    const cy = pageHeightIn - ((node.position.y - minY) / DPI + marginIn + hIn / 2);
+
+    nodeCenterMap.set(node.id, { cx, cy, w: wIn, h: hIn });
 
     const roundingIn = style.isPill ? 0.35 : 0.04;
     const combinedText = subtitle ? `${title}&#x0A;${subtitle}` : title;
@@ -249,8 +298,8 @@ export function generateVisioVdx(
     shapeXmlLines.push(`        <!-- Node: ${escapeXml(node.id)} -->`);
     shapeXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" LineStyle="3" FillStyle="3" TextStyle="3">`);
     shapeXmlLines.push('          <XForm>');
-    shapeXmlLines.push(`            <PinX>${xIn.toFixed(4)}</PinX>`);
-    shapeXmlLines.push(`            <PinY>${yIn.toFixed(4)}</PinY>`);
+    shapeXmlLines.push(`            <PinX>${cx.toFixed(4)}</PinX>`);
+    shapeXmlLines.push(`            <PinY>${cy.toFixed(4)}</PinY>`);
     shapeXmlLines.push(`            <Width>${wIn.toFixed(4)}</Width>`);
     shapeXmlLines.push(`            <Height>${hIn.toFixed(4)}</Height>`);
     shapeXmlLines.push(`            <LocPinX F="Width*0.5">${(wIn / 2).toFixed(4)}</LocPinX>`);
@@ -279,6 +328,7 @@ export function generateVisioVdx(
     shapeXmlLines.push('          </Character>');
 
     // 4 Cardinal Connection Points for smart connector snapping
+    // Index 0: Top, Index 1: Bottom, Index 2: Left, Index 3: Right
     shapeXmlLines.push('          <Connection IX="0">');
     shapeXmlLines.push(`            <X F="Width*0.5">${(wIn / 2).toFixed(4)}</X>`);
     shapeXmlLines.push(`            <Y F="Height*1">${hIn.toFixed(4)}</Y>`);
@@ -333,36 +383,50 @@ export function generateVisioVdx(
 
     if (!sourceShapeId || !targetShapeId) continue;
 
-    const sourceNode = nodes.find((n) => n.id === edge.source);
-    const targetNode = nodes.find((n) => n.id === edge.target);
+    const sourceCenter = nodeCenterMap.get(edge.source);
+    const targetCenter = nodeCenterMap.get(edge.target);
 
-    if (!sourceNode || !targetNode) continue;
+    if (!sourceCenter || !targetCenter) continue;
 
     const shapeId = currentShapeId++;
 
-    const sourceStyle = getNodeStyle(sourceNode.type || 'vxml-block');
-    const targetStyle = getNodeStyle(targetNode.type || 'vxml-block');
+    // Calculate boundary exit port on source and boundary entry port on target
+    // Connectors start and end on the shape PERIMETER, never at the center!
+    const sourcePort = getBestConnectionPort(
+      sourceCenter.cx,
+      sourceCenter.cy,
+      sourceCenter.w,
+      sourceCenter.h,
+      targetCenter.cx,
+      targetCenter.cy,
+      true
+    );
 
-    const swIn = sourceStyle.isDiamond ? diamondWidth : defaultNodeWidth;
-    const shIn = sourceStyle.isDiamond ? diamondHeight : defaultNodeHeight;
-    const twIn = targetStyle.isDiamond ? diamondWidth : defaultNodeWidth;
-    const thIn = targetStyle.isDiamond ? diamondHeight : defaultNodeHeight;
+    const targetPort = getBestConnectionPort(
+      targetCenter.cx,
+      targetCenter.cy,
+      targetCenter.w,
+      targetCenter.h,
+      sourceCenter.cx,
+      sourceCenter.cy,
+      false
+    );
 
-    const x1 = (sourceNode.position.x - minX) / DPI + marginIn + swIn / 2;
-    const y1 = pageHeightIn - ((sourceNode.position.y - minY) / DPI + marginIn + shIn / 2);
-    const x2 = (targetNode.position.x - minX) / DPI + marginIn + twIn / 2;
-    const y2 = pageHeightIn - ((targetNode.position.y - minY) / DPI + marginIn + thIn / 2);
+    const x1 = sourcePort.x;
+    const y1 = sourcePort.y;
+    const x2 = targetPort.x;
+    const y2 = targetPort.y;
 
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
     const dx = x2 - x1;
     const dy = y2 - y1;
-    const length = Math.sqrt(dx * dx + dy * dy);
+    const length = Math.max(Math.sqrt(dx * dx + dy * dy), 0.05);
     const angleRad = Math.atan2(dy, dx);
 
     const edgeLabel = edge.label ? String(edge.label) : (edge.sourceHandle || '');
 
-    shapeXmlLines.push(`        <!-- 1-D Dynamic Connector: ${escapeXml(edge.id)} (${edge.source} -> ${edge.target}) -->`);
+    shapeXmlLines.push(`        <!-- 1-D Connector: ${escapeXml(edge.id)} (${edge.source} -> ${edge.target}) -->`);
     shapeXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" LineStyle="3" TextStyle="3">`);
     shapeXmlLines.push('          <XForm>');
     shapeXmlLines.push(`            <PinX F="(BeginX+EndX)/2">${midX.toFixed(4)}</PinX>`);
@@ -371,7 +435,7 @@ export function generateVisioVdx(
     shapeXmlLines.push('            <Height>0</Height>');
     shapeXmlLines.push(`            <LocPinX F="Width*0.5">${(length / 2).toFixed(4)}</LocPinX>`);
     shapeXmlLines.push('            <LocPinY F="Height*0.5">0</LocPinY>');
-    shapeXmlLines.push(`            <Angle F="ATAN2(EndY-BeginY,EndX-BeginX)">${angleRad.toFixed(4)}</Angle>`);
+    shapeXmlLines.push(`            <Angle Unit="RAD" F="ATAN2(EndY-BeginY,EndX-BeginX)">${angleRad.toFixed(4)}</Angle>`);
     shapeXmlLines.push('          </XForm>');
     shapeXmlLines.push('          <XForm1D>');
     shapeXmlLines.push(`            <BeginX>${x1.toFixed(4)}</BeginX>`);
@@ -379,6 +443,9 @@ export function generateVisioVdx(
     shapeXmlLines.push(`            <EndX>${x2.toFixed(4)}</EndX>`);
     shapeXmlLines.push(`            <EndY>${y2.toFixed(4)}</EndY>`);
     shapeXmlLines.push('          </XForm1D>');
+    shapeXmlLines.push('          <ShapeLayout>');
+    shapeXmlLines.push('            <ShapeRouteStyle>1</ShapeRouteStyle>'); // 1 = Right-angle / orthogonal routing
+    shapeXmlLines.push('          </ShapeLayout>');
     shapeXmlLines.push('          <Line>');
     shapeXmlLines.push('            <LineColor>#334155</LineColor>'); // Slate-700
     shapeXmlLines.push(`            <LineWeight>${CONNECTOR_WEIGHT_IN}</LineWeight>`); // Clean ~0.9pt stroke
@@ -387,13 +454,22 @@ export function generateVisioVdx(
     shapeXmlLines.push('            <EndArrowSize>1</EndArrowSize>'); // 1 = Small neat arrow
     shapeXmlLines.push('          </Line>');
     if (edgeLabel) {
+      shapeXmlLines.push('          <TextBlock>');
+      shapeXmlLines.push('            <VerticalAlign>1</VerticalAlign>');
+      shapeXmlLines.push('            <TextBkgnd>1</TextBkgnd>'); // Solid background so line doesn't cut through text
+      shapeXmlLines.push('          </TextBlock>');
+      shapeXmlLines.push('          <TxtXForm>');
+      shapeXmlLines.push(`            <TxtPinX F="Width*0.5">${(length / 2).toFixed(4)}</TxtPinX>`);
+      shapeXmlLines.push('            <TxtPinY F="Height*0.5">0.1</TxtPinY>');
+      shapeXmlLines.push('            <TxtAngle Unit="DEG">0</TxtAngle>'); // Always horizontal text
+      shapeXmlLines.push('          </TxtXForm>');
       shapeXmlLines.push(`          <Text><cp IX="0"/><pp IX="0"/>${escapeXml(edgeLabel)}</Text>`);
       shapeXmlLines.push('          <Paragraph IX="0">');
       shapeXmlLines.push('            <HorzAlign>1</HorzAlign>');
       shapeXmlLines.push('          </Paragraph>');
       shapeXmlLines.push('          <Character IX="0">');
       shapeXmlLines.push('            <Font>1</Font>');
-      shapeXmlLines.push('            <Color>#1E293B</Color>');
+      shapeXmlLines.push('            <Color>#0F172A</Color>');
       shapeXmlLines.push('            <Size Unit="PT">7.5</Size>');
       shapeXmlLines.push('            <Style>1</Style>');
       shapeXmlLines.push('          </Character>');
@@ -407,9 +483,10 @@ export function generateVisioVdx(
     shapeXmlLines.push('          </Geom>');
     shapeXmlLines.push('        </Shape>');
 
-    // Glue connections to source and target shape pins
-    edgeConnectLines.push(`        <Connect FromSheet="${shapeId}" FromCell="BeginX" FromPart="9" ToSheet="${sourceShapeId}" ToCell="PinX" ToPart="3"/>`);
-    edgeConnectLines.push(`        <Connect FromSheet="${shapeId}" FromCell="EndX" FromPart="9" ToSheet="${targetShapeId}" ToCell="PinX" ToPart="3"/>`);
+    // Glue connections to boundary connection points (Connections.X1 to Connections.X4)
+    // NEVER to PinX (shape center)!
+    edgeConnectLines.push(`        <Connect FromSheet="${shapeId}" FromCell="BeginX" FromPart="9" ToSheet="${sourceShapeId}" ToCell="Connections.X${sourcePort.connIdx + 1}" ToPart="3"/>`);
+    edgeConnectLines.push(`        <Connect FromSheet="${shapeId}" FromCell="EndX" FromPart="9" ToSheet="${targetShapeId}" ToCell="Connections.X${targetPort.connIdx + 1}" ToPart="3"/>`);
   }
 
   const docTitle = docSettings?.application || 'VoiceXML 2.1 Callflow';
