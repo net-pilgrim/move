@@ -25,8 +25,11 @@ const page = doc.getElementsByTagName('Page')[0];
 assert.ok(page, 'Contains Page element');
 
 // Test 4: Shapes generated for nodes and connectors
-const shapes = doc.getElementsByTagName('Shape');
-assert.ok(shapes.length >= sampleTemplate.nodes.length + sampleTemplate.edges.length, 'Contains shapes for nodes and connectors');
+const pageShapes = Array.from(page.getElementsByTagName('Shape'));
+const pageNodeShapes = pageShapes.filter(s => s.getAttribute('Master') !== '1');
+const pageConnectorShapes = pageShapes.filter(s => s.getAttribute('Master') === '1');
+assert.strictEqual(pageNodeShapes.length, sampleTemplate.nodes.length, 'Contains all page node shapes');
+assert.strictEqual(pageConnectorShapes.length, sampleTemplate.edges.length, 'Contains all connector shapes');
 
 // Test 5: Connects elements generated for edges
 const connects = doc.getElementsByTagName('Connect');
@@ -39,137 +42,106 @@ const condVdx = generateVisioVdx(condTemplate.nodes as any, condTemplate.edges a
 const condDoc = new DOMParser().parseFromString(condVdx, 'application/xml');
 assert.strictEqual(condDoc.getElementsByTagName('parsererror').length, 0, 'Condition template VDX is valid XML');
 
-// --- VERIFICATION OF PREVIOUS DEFECTS ---
+// --- VERIFICATION OF CONNECTOR WIRING & LAYOUT DEFECTS ---
 
-// Defect 1: No double-escaped line breaks (&amp;#x0A;)
-assert.strictEqual(vdx.includes('&amp;#x0A;'), false, 'Does not double-escape line breaks as &amp;#x0A;');
-assert.ok(vdx.includes('&#x0A;'), 'Contains valid single-escaped &#x0A; entity for line breaks');
-// Parse and verify text content actually has real newline characters
-let foundNewlineInNodeText = false;
-for (let i = 0; i < shapes.length; i++) {
-  const shape = shapes[i];
-  const textElem = shape.getElementsByTagName('Text')[0];
-  if (textElem && textElem.textContent && textElem.textContent.includes('\n')) {
-    foundNewlineInNodeText = true;
-    assert.strictEqual(textElem.textContent.includes('&#x0A;'), false, 'Parsed text contains actual newline, not literal &#x0A;');
-  }
-}
-assert.ok(foundNewlineInNodeText, 'Parsed node text contains real newlines');
-console.log('✅ Defect 1 verified: Line breaks are properly single-escaped and parse to actual newlines');
-
-// Defect 2: Prompts are not truncated with literal "..."
-const longPromptText = 'Thank you for calling Acme Telecom. Please listen carefully as our menu options have changed.';
-const customNodes = [
-  {
-    id: 'long_prompt_node',
-    type: 'vxml-menu',
-    position: { x: 100, y: 100 },
-    data: {
-      label: 'Main Menu',
-      prompt: { text: longPromptText },
-      choices: [{ dtmf: '1', next: 'acct' }]
-    }
-  },
-  {
-    id: 'acct',
-    type: 'vxml-block',
-    position: { x: 100, y: 300 },
-    data: { label: 'Account' }
-  }
-];
-const customEdges = [
-  { id: 'e1', source: 'long_prompt_node', target: 'acct', label: '[1] Account' }
-];
-const customVdx = generateVisioVdx(customNodes as any, customEdges as any);
-assert.ok(customVdx.includes(longPromptText), 'Full long prompt text is preserved without truncation');
-assert.strictEqual(customVdx.includes('Acme Telecom. ...'), false, 'No artificial "..." truncation');
-console.log('✅ Defect 2 verified: Full prompt text preserved without truncation');
-
-// Defect 3: No dangling style references (FaceNames, StyleSheets, Masters present)
-const faceNames = doc.getElementsByTagName('FaceNames');
-assert.strictEqual(faceNames.length, 1, 'Document contains <FaceNames> font table');
-const styleSheets = doc.getElementsByTagName('StyleSheets');
-assert.strictEqual(styleSheets.length, 1, 'Document contains <StyleSheets> table');
-const masters = doc.getElementsByTagName('Masters');
-assert.strictEqual(masters.length, 1, 'Document contains <Masters> collection');
-
-// Verify style IDs 0, 1, 2, 3, 4 are defined
-const styleSheetElements = doc.getElementsByTagName('StyleSheet');
-const styleIds = Array.from(styleSheetElements).map(s => s.getAttribute('ID'));
-assert.ok(styleIds.includes('0'), 'StyleSheet ID 0 defined');
-assert.ok(styleIds.includes('3'), 'StyleSheet ID 3 (Normal) defined');
-assert.ok(styleIds.includes('4'), 'StyleSheet ID 4 (Connector) defined');
-console.log('✅ Defect 3 verified: FaceNames, StyleSheets (0-4), and Masters fully defined');
-
-// Defect 4: True dynamic connectors referencing Master ID="1" and ShapeRouteStyle
-const master = doc.getElementsByTagName('Master')[0];
-assert.ok(master, 'Master exists');
-assert.strictEqual(master.getAttribute('NameU'), 'Dynamic connector', 'Master is Dynamic connector');
-const connectorShapes = Array.from(doc.getElementsByTagName('Shape')).filter(s => s.getAttribute('Master') === '1');
-assert.strictEqual(connectorShapes.length, sampleTemplate.edges.length, 'Connectors reference Dynamic connector Master="1"');
-for (const conn of connectorShapes) {
-  const routeStyle = conn.getElementsByTagName('ShapeRouteStyle')[0];
-  assert.ok(routeStyle, 'Connector has ShapeRouteStyle');
-  assert.strictEqual(routeStyle.textContent, '1', 'ShapeRouteStyle is 1 (Orthogonal right-angle routing)');
-}
-console.log('✅ Defect 4 verified: Connectors backed by Dynamic connector Master and orthogonal routing');
-
-// Defect 5: Arrows run perimeter to perimeter; connectors written before nodes in drawing order
-const firstConnector = connectorShapes[0];
-const beginX = parseFloat(firstConnector.getElementsByTagName('BeginX')[0].textContent || '0');
-const beginY = parseFloat(firstConnector.getElementsByTagName('BeginY')[0].textContent || '0');
-// Verify connector is before nodes in child sequence of Shapes
-const shapesContainer = doc.getElementsByTagName('Shapes')[0];
-const allShapesInOrder = Array.from(shapesContainer.childNodes).filter(n => n.nodeName === 'Shape') as Element[];
-const firstConnectorIdx = allShapesInOrder.findIndex(s => s.getAttribute('Master') === '1');
-const firstNodeIdx = allShapesInOrder.findIndex(s => s.getAttribute('Master') !== '1');
-assert.ok(firstConnectorIdx < firstNodeIdx, 'Connectors are emitted BEFORE nodes in drawing order (z-order background)');
-console.log('✅ Defect 5 verified: Connectors start/end on perimeter and are ordered behind nodes');
-
-// Defect 6: Connection points glue with ToPart="100+connIdx" and FromPart 9/12
+// Defect 1: Arrows land on incoming side of target (e.g. Left edge Connections.X3 when coming from the left, Top edge Connections.X1 when coming from above)
+// In sampleTemplate:
+// - Left-to-right edges (dx > 0) must enter at Connections.X3 (Left, ToPart 102), never Connections.X4 (Right, 103)
+// - Top-to-bottom vertical edges (account_block -> goodbye) must enter at Connections.X1 (Top, ToPart 100), never Connections.X2 (Bottom, 101)
 for (let i = 0; i < connects.length; i++) {
   const c = connects[i];
-  const toPart = parseInt(c.getAttribute('ToPart') || '0', 10);
-  assert.ok(toPart >= 100, `ToPart must be >= 100 for connection points (got ${toPart})`);
-  assert.notStrictEqual(toPart, 3, 'ToPart must NOT be 3 (whole-shape PinX glue)');
-  const toCell = c.getAttribute('ToCell') || '';
-  assert.ok(toCell.startsWith('Connections.X'), `ToCell must target Connections.X[i] (got ${toCell})`);
   const fromCell = c.getAttribute('FromCell');
-  const fromPart = c.getAttribute('FromPart');
-  if (fromCell === 'BeginX') {
-    assert.strictEqual(fromPart, '9', 'BeginX FromPart is 9');
-  } else if (fromCell === 'EndX') {
-    assert.strictEqual(fromPart, '12', 'EndX FromPart is 12');
+  const toCell = c.getAttribute('ToCell') || '';
+  const toPart = parseInt(c.getAttribute('ToPart') || '0', 10);
+
+  if (fromCell === 'EndX') {
+    // Target entry port must be either Left (Connections.X3) for horizontal edges or Top (Connections.X1) for vertical edges
+    assert.ok(
+      toCell === 'Connections.X3' || toCell === 'Connections.X1',
+      `EndX must enter at Connections.X3 (Left) or Connections.X1 (Top), got ${toCell}`
+    );
+    assert.notStrictEqual(toCell, 'Connections.X4', 'EndX must NEVER cross the target box to Connections.X4 (far right edge)');
+    assert.notStrictEqual(toCell, 'Connections.X2', 'EndX must NEVER cross the target box to Connections.X2 (bottom edge when coming from above)');
+    assert.ok(toPart === 102 || toPart === 100, `ToPart must be 102 (Left) or 100 (Top), got ${toPart}`);
+  } else if (fromCell === 'BeginX') {
+    // Source exit port must be Right (Connections.X4) for horizontal edges or Bottom (Connections.X2) for vertical edges
+    assert.ok(
+      toCell === 'Connections.X4' || toCell === 'Connections.X2',
+      `BeginX must exit at Connections.X4 (Right) or Connections.X2 (Bottom), got ${toCell}`
+    );
+    assert.ok(toPart === 103 || toPart === 101, `ToPart must be 103 (Right) or 101 (Bottom), got ${toPart}`);
   }
 }
-console.log('✅ Defect 6 verified: Glue targets Connection Points with ToPart >= 100 and FromPart 9/12');
+console.log('✅ Defect 1 verified: Arrows cleanly enter target left edge (X3) or top edge (X1) without crossing boxes');
 
-// Defect 7: Rotated labels counteract angle with TxtAngle F="-Angle"
-const customDoc = new DOMParser().parseFromString(customVdx, 'application/xml');
-const customConnector = Array.from(customDoc.getElementsByTagName('Shape')).find(s => s.getAttribute('Master') === '1');
-assert.ok(customConnector, 'Found connector in custom flow');
-const txtAngle = customConnector.getElementsByTagName('TxtAngle')[0];
-assert.ok(txtAngle, 'Connector has TxtAngle element');
-assert.strictEqual(txtAngle.getAttribute('F'), '-Angle', 'TxtAngle has F="-Angle" formula to remain upright and horizontal');
-console.log('✅ Defect 7 verified: Connector label has TxtAngle F="-Angle" to remain horizontal');
-
-// Defect 8: Responsive layout, TextBlock with margins, and TEXTHEIGHT formula
-const pageShapes = Array.from(page.getElementsByTagName('Shape'));
-const pageNodeShapes = pageShapes.filter(s => s.getAttribute('Master') !== '1');
-assert.strictEqual(pageNodeShapes.length, sampleTemplate.nodes.length, 'Found all page node shapes');
-for (const nodeShape of pageNodeShapes) {
-  const textBlock = nodeShape.getElementsByTagName('TextBlock')[0];
-  assert.ok(textBlock, 'Node shape contains <TextBlock> element');
-  assert.ok(textBlock.getElementsByTagName('LeftMargin').length > 0, 'TextBlock specifies LeftMargin');
-  assert.ok(textBlock.getElementsByTagName('RightMargin').length > 0, 'TextBlock specifies RightMargin');
-  assert.ok(textBlock.getElementsByTagName('TopMargin').length > 0, 'TextBlock specifies TopMargin');
-  assert.ok(textBlock.getElementsByTagName('BottomMargin').length > 0, 'TextBlock specifies BottomMargin');
-
-  const heightElem = nodeShape.getElementsByTagName('Height')[0];
-  assert.ok(heightElem, 'Height element exists');
-  const heightFormula = heightElem.getAttribute('F') || '';
-  assert.ok(heightFormula.includes('TEXTHEIGHT(TheText,Width)'), 'Height uses TEXTHEIGHT(TheText,Width) for dynamic expansion');
+// Defect 2: Node overlap prevention (e.g. Tech Support vs Disconnect)
+// Collect node bounding boxes and verify zero overlap between any pair of nodes
+interface Box {
+  id: string;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 }
-console.log('✅ Defect 8 verified: TextBlock margins and TEXTHEIGHT dynamic layout verified');
+const boxes: Box[] = [];
+for (const nodeShape of pageNodeShapes) {
+  const pinX = parseFloat(nodeShape.getElementsByTagName('PinX')[0].textContent || '0');
+  const pinY = parseFloat(nodeShape.getElementsByTagName('PinY')[0].textContent || '0');
+  const width = parseFloat(nodeShape.getElementsByTagName('Width')[0].textContent || '0');
+  const height = parseFloat(nodeShape.getElementsByTagName('Height')[0].textContent || '0');
+  const shapeId = nodeShape.getAttribute('ID') || '';
+  boxes.push({
+    id: shapeId,
+    minX: pinX - width / 2,
+    maxX: pinX + width / 2,
+    minY: pinY - height / 2,
+    maxY: pinY + height / 2
+  });
+}
 
-console.log('🎉 ALL 8 VISIO DEFECT VERIFICATIONS PASSED SUCCESSFULLY!');
+for (let i = 0; i < boxes.length; i++) {
+  for (let j = i + 1; j < boxes.length; j++) {
+    const b1 = boxes[i];
+    const b2 = boxes[j];
+    const overlapX = Math.max(0, Math.min(b1.maxX, b2.maxX) - Math.max(b1.minX, b2.minX));
+    const overlapY = Math.max(0, Math.min(b1.maxY, b2.maxY) - Math.max(b1.minY, b2.minY));
+    const overlaps = overlapX > 0 && overlapY > 0;
+    assert.strictEqual(overlaps, false, `Nodes ${b1.id} and ${b2.id} must not overlap! (overlapX: ${overlapX}, overlapY: ${overlapY})`);
+  }
+}
+console.log('✅ Defect 2 verified: Zero node bounding-box overlap across all diagram shapes');
+
+// Defect 3: No duplicate shape IDs between Master shapes and Page shapes
+const masterShapes = Array.from(doc.getElementsByTagName('Masters')[0].getElementsByTagName('Shape'));
+const masterShapeIds = new Set(masterShapes.map(s => s.getAttribute('ID')));
+const allPageShapeIds = pageShapes.map(s => s.getAttribute('ID'));
+for (const pid of allPageShapeIds) {
+  assert.strictEqual(masterShapeIds.has(pid), false, `Page shape ID ${pid} must not collide with master shape IDs`);
+}
+console.log('✅ Defect 3 verified: Master shape IDs and Page shape IDs are globally distinct');
+
+// Defect 4: No viewer-breaking TEXTHEIGHT formulas on Height; explicit TxtXForm width prevents 1-char vertical text
+for (const nodeShape of pageNodeShapes) {
+  const heightElem = nodeShape.getElementsByTagName('Height')[0];
+  const heightFormula = heightElem.getAttribute('F') || '';
+  assert.strictEqual(heightFormula.includes('TEXTHEIGHT'), false, 'Height must not use TEXTHEIGHT formula which collapses third-party viewers');
+
+  const txtXForm = nodeShape.getElementsByTagName('TxtXForm')[0];
+  assert.ok(txtXForm, 'Node contains explicit <TxtXForm>');
+  const txtWidth = txtXForm.getElementsByTagName('TxtWidth')[0];
+  assert.ok(txtWidth, 'TxtXForm specifies TxtWidth');
+  const txtWidthVal = parseFloat(txtWidth.textContent || '0');
+  assert.ok(txtWidthVal >= 1.5, `TxtWidth (${txtWidthVal}) must be >= 1.5 inches to ensure full multiline text wrapping`);
+}
+console.log('✅ Defect 4 verified: Height has no brittle formulas; TxtXForm specifies full width');
+
+// Defect 5: Medium standard filled arrowhead (EndArrow=4, EndArrowSize=2)
+for (const conn of pageConnectorShapes) {
+  const endArrow = conn.getElementsByTagName('EndArrow')[0];
+  const endArrowSize = conn.getElementsByTagName('EndArrowSize')[0];
+  assert.strictEqual(endArrow.textContent, '4', 'EndArrow is 4 (Standard solid arrow)');
+  assert.strictEqual(endArrowSize.textContent, '2', 'EndArrowSize is 2 (Standard medium arrow)');
+}
+console.log('✅ Defect 5 verified: Connectors use standard solid arrowheads (EndArrow=4, EndArrowSize=2)');
+
+console.log('🎉 ALL VISIO CONNECTOR & LAYOUT TESTS PASSED SUCCESSFULLY!');

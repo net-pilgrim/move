@@ -160,8 +160,9 @@ function getNodeText(node: Node): { title: string; subtitle: string } {
 }
 
 /**
- * Calculates responsive box dimensions (in inches) based on title and subtitle content,
- * ensuring prompts wrap properly without clipping or overflowing.
+ * Calculates responsive box dimensions (in inches).
+ * Standardizes box width to 1.9 inches so boxes never collide horizontally with adjacent columns,
+ * while expanding height cleanly to accommodate all lines of wrapped text.
  */
 function calculateNodeDimensions(
   title: string,
@@ -169,21 +170,16 @@ function calculateNodeDimensions(
   isDiamond?: boolean
 ): { wIn: number; hIn: number } {
   if (isDiamond) {
-    // Condition decision diamond
-    const textLen = Math.max(title.length, subtitle.length);
-    const w = Math.max(1.8, Math.min(3.0, 1.6 + textLen * 0.04));
-    const h = Math.max(1.0, Math.min(1.6, 0.9 + textLen * 0.025));
-    return { wIn: w, hIn: h };
+    return { wIn: 1.85, hIn: 1.15 };
   }
 
-  // Width: default 2.2 inches, expand up to 3.2 inches for long prompts
-  const maxLineLen = Math.max(title.length, subtitle.length);
-  const wIn = maxLineLen > 35 ? Math.min(3.2, 2.2 + (maxLineLen - 35) * 0.02) : 2.2;
+  // Standard width: 1.90 inches gives clean multi-column flowchart layout
+  const wIn = 1.90;
 
-  // Height: compute based on estimated wrapped lines (~32 chars per line at 8.5/7.5pt)
-  const estSubtitleLines = subtitle ? Math.max(1, Math.ceil(subtitle.length / 30)) : 0;
-  // Header is ~0.45 in, each subtitle line adds ~0.2 in, with minimum 0.75 in
-  const hIn = subtitle ? Math.max(0.75, 0.45 + estSubtitleLines * 0.22) : 0.65;
+  // Height: compute based on wrapped lines (~26 characters per line at 7.5pt inside 1.90" box with margins)
+  const estSubtitleLines = subtitle ? Math.max(1, Math.ceil(subtitle.length / 26)) : 0;
+  // Header is ~0.45 in, each wrapped subtitle line adds ~0.18 in, minimum height 0.75 in
+  const hIn = subtitle ? Math.max(0.75, 0.45 + estSubtitleLines * 0.18) : 0.65;
 
   return { wIn, hIn };
 }
@@ -191,65 +187,72 @@ function calculateNodeDimensions(
 interface PortInfo {
   x: number;
   y: number;
-  connIdx: number; // 0: Top, 1: Bottom, 2: Left, 3: Right
+  connIdx: number; // 0: Top (X1), 1: Bottom (X2), 2: Left (X3), 3: Right (X4)
 }
 
 /**
- * Calculates the exact boundary exit or entry port for a shape based on the relative
- * direction to the other shape, ensuring connectors start and end cleanly on the shape perimeter.
+ * Calculates the best cardinal port (Top, Bottom, Left, Right) on the SOURCE shape
+ * to exit cleanly towards the target shape.
  */
-function getBestConnectionPort(
-  cx: number,
-  cy: number,
-  w: number,
-  h: number,
-  otherCx: number,
-  otherCy: number,
-  isSource: boolean
+function getSourceExitPort(
+  source: { cx: number; cy: number; w: number; h: number },
+  target: { cx: number; cy: number; w: number; h: number }
 ): PortInfo {
-  const dx = otherCx - cx;
-  const dy = otherCy - cy; // Visio Y coordinates (upwards)
+  const dx = target.cx - source.cx;
+  const dy = target.cy - source.cy; // Visio Y coordinates (upwards)
 
-  if (Math.abs(dx) >= Math.abs(dy) * 0.5) {
+  if (Math.abs(dx) >= Math.abs(dy) * 0.6) {
     if (dx >= 0) {
-      // Other shape is to the right
-      return isSource
-        ? { x: cx + w / 2, y: cy, connIdx: 3 } // Exit Right
-        : { x: cx - w / 2, y: cy, connIdx: 2 }; // Enter Left
+      // Target is to the right -> exit from right edge
+      return { x: source.cx + source.w / 2, y: source.cy, connIdx: 3 }; // Connections.X4 (Right)
     } else {
-      // Other shape is to the left
-      return isSource
-        ? { x: cx - w / 2, y: cy, connIdx: 2 } // Exit Left
-        : { x: cx + w / 2, y: cy, connIdx: 3 }; // Enter Right
+      // Target is to the left -> exit from left edge
+      return { x: source.cx - source.w / 2, y: source.cy, connIdx: 2 }; // Connections.X3 (Left)
     }
   } else {
     if (dy >= 0) {
-      // Other shape is above
-      return isSource
-        ? { x: cx, y: cy + h / 2, connIdx: 0 } // Exit Top
-        : { x: cx, y: cy - h / 2, connIdx: 1 }; // Enter Bottom
+      // Target is above -> exit from top edge
+      return { x: source.cx, y: source.cy + source.h / 2, connIdx: 0 }; // Connections.X1 (Top)
     } else {
-      // Other shape is below
-      return isSource
-        ? { x: cx, y: cy - h / 2, connIdx: 1 } // Exit Bottom
-        : { x: cx, y: cy + h / 2, connIdx: 0 }; // Enter Top
+      // Target is below -> exit from bottom edge
+      return { x: source.cx, y: source.cy - source.h / 2, connIdx: 1 }; // Connections.X2 (Bottom)
+    }
+  }
+}
+
+/**
+ * Calculates the best cardinal port (Top, Bottom, Left, Right) on the TARGET shape
+ * to receive the connector coming from the source shape without crossing the target box.
+ */
+function getTargetEntryPort(
+  source: { cx: number; cy: number; w: number; h: number },
+  target: { cx: number; cy: number; w: number; h: number }
+): PortInfo {
+  const dx = target.cx - source.cx;
+  const dy = target.cy - source.cy; // Visio Y coordinates (upwards)
+
+  if (Math.abs(dx) >= Math.abs(dy) * 0.6) {
+    if (dx >= 0) {
+      // Target is to the right of source -> arrow comes from the left, enter at LEFT edge
+      return { x: target.cx - target.w / 2, y: target.cy, connIdx: 2 }; // Connections.X3 (Left)
+    } else {
+      // Target is to the left of source -> arrow comes from the right, enter at RIGHT edge
+      return { x: target.cx + target.w / 2, y: target.cy, connIdx: 3 }; // Connections.X4 (Right)
+    }
+  } else {
+    if (dy >= 0) {
+      // Target is above source -> arrow comes from below, enter at BOTTOM edge
+      return { x: target.cx, y: target.cy - target.h / 2, connIdx: 1 }; // Connections.X2 (Bottom)
+    } else {
+      // Target is below source -> arrow comes from above, enter at TOP edge
+      return { x: target.cx, y: target.cy + target.h / 2, connIdx: 0 }; // Connections.X1 (Top)
     }
   }
 }
 
 /**
  * Generates an official Microsoft Visio XML Drawing (.vdx / DatadiagramML) file
- * from Svelte Flow nodes and edges conforming to the Microsoft Visio 2003 XML schema.
- *
- * Implements:
- * 1. Single-escaped linebreaks: &#x0A; inside <Text> for proper multiline parsing.
- * 2. Full prompt preservation: Prompts and subtitles are never truncated.
- * 3. Complete Visio schema sections: FaceNames, StyleSheets (0-4), and Masters (Dynamic connector).
- * 4. True Dynamic Connectors: Backed by Master ID="1" and ShapeRouteStyle=1 (orthogonal routing).
- * 5. Clean perimeter connection points: Connectors start and end on perimeter ports, rendered in background.
- * 6. Connection point glue: ToPart="100 + connIdx" and FromPart 9/12 to anchor to shape boundary.
- * 7. Upright horizontal edge labels: TxtAngle F="-Angle" counteracts rotation on diagonal links.
- * 8. Responsive box layout & TextBlock margins: Height uses TEXTHEIGHT(TheText, Width) with proper margins.
+ * from Svelte Flow nodes and edges conforming strictly to the Microsoft Visio 2003 XML schema.
  */
 export function generateVisioVdx(
   nodes: Node[],
@@ -293,19 +296,21 @@ export function generateVisioVdx(
     }
   }
 
-  // Scale factor: 120 canvas pixels = 1.0 inch in Visio
-  const DPI = 120;
+  // Scale factor: 96 canvas pixels = 1.0 inch in Visio
+  // 96 DPI provides generous spacing between flowchart columns (e.g. 370px = 3.85 inches)
+  // completely preventing any node overlap while keeping diagram compact and readable.
+  const DPI = 96;
 
-  const contentWidthIn = Math.max((maxX - minX) / DPI + 3.0, 8.5);
+  const contentWidthIn = Math.max((maxX - minX) / DPI + 2.5, 8.5);
   const contentHeightIn = Math.max((maxY - minY) / DPI + 2.5, 6.0);
 
   const pageWidthIn = Math.max(11.0, contentWidthIn + marginIn * 2);
   const pageHeightIn = Math.max(8.5, contentHeightIn + marginIn * 2);
 
   // Shape IDs:
-  // We reserve ID=1 for the Dynamic connector Master in <Masters>.
-  // Page shapes start at ID=2.
-  let currentShapeId = 2;
+  // Master shapes inside <Masters> use ID="1".
+  // Page shapes start safely at ID="10" to guarantee zero ID collision.
+  let currentShapeId = 10;
 
   // Map node IDs to Visio shape IDs and computed centers
   const nodeShapeIdMap = new Map<string, number>();
@@ -322,6 +327,46 @@ export function generateVisioVdx(
     const cy = pageHeightIn - ((node.position.y - minY) / DPI + marginIn + dim.hIn / 2);
 
     nodeCenterMap.set(node.id, { cx, cy, w: dim.wIn, h: dim.hIn });
+  }
+
+  // Automatic overlap resolution: guarantee at least 0.35 in clearance between any two nodes
+  const nodeIds = Array.from(nodeCenterMap.keys());
+  for (let i = 0; i < nodeIds.length; i++) {
+    for (let j = i + 1; j < nodeIds.length; j++) {
+      const c1 = nodeCenterMap.get(nodeIds[i])!;
+      const c2 = nodeCenterMap.get(nodeIds[j])!;
+
+      const minSepX = (c1.w + c2.w) / 2 + 0.35;
+      const minSepY = (c1.h + c2.h) / 2 + 0.35;
+      const diffX = Math.abs(c1.cx - c2.cx);
+      const diffY = Math.abs(c1.cy - c2.cy);
+
+      if (diffX < minSepX && diffY < minSepY) {
+        // Overlap detected: separate them along the axis with smaller overlap
+        const overlapX = minSepX - diffX;
+        const overlapY = minSepY - diffY;
+
+        if (overlapX <= overlapY) {
+          const shift = overlapX / 2 + 0.05;
+          if (c1.cx <= c2.cx) {
+            c1.cx -= shift;
+            c2.cx += shift;
+          } else {
+            c1.cx += shift;
+            c2.cx -= shift;
+          }
+        } else {
+          const shift = overlapY / 2 + 0.05;
+          if (c1.cy <= c2.cy) {
+            c1.cy -= shift;
+            c2.cy += shift;
+          } else {
+            c1.cy += shift;
+            c2.cy -= shift;
+          }
+        }
+      }
+    }
   }
 
   // Generate Connector XML lines first (so connectors render behind nodes in drawing order)
@@ -341,26 +386,9 @@ export function generateVisioVdx(
 
     const shapeId = currentShapeId++;
 
-    // Calculate exact boundary exit and entry ports
-    const sourcePort = getBestConnectionPort(
-      sourceCenter.cx,
-      sourceCenter.cy,
-      sourceCenter.w,
-      sourceCenter.h,
-      targetCenter.cx,
-      targetCenter.cy,
-      true
-    );
-
-    const targetPort = getBestConnectionPort(
-      targetCenter.cx,
-      targetCenter.cy,
-      targetCenter.w,
-      targetCenter.h,
-      sourceCenter.cx,
-      sourceCenter.cy,
-      false
-    );
+    // Calculate exact boundary exit and entry ports (source exits towards target; target enters from source)
+    const sourcePort = getSourceExitPort(sourceCenter, targetCenter);
+    const targetPort = getTargetEntryPort(sourceCenter, targetCenter);
 
     const x1 = sourcePort.x;
     const y1 = sourcePort.y;
@@ -402,8 +430,8 @@ export function generateVisioVdx(
     connectorXmlLines.push('            <LineColor>#334155</LineColor>');
     connectorXmlLines.push(`            <LineWeight>${CONNECTOR_WEIGHT_IN}</LineWeight>`);
     connectorXmlLines.push('            <LinePattern>1</LinePattern>');
-    connectorXmlLines.push('            <EndArrow>4</EndArrow>');
-    connectorXmlLines.push('            <EndArrowSize>1</EndArrowSize>');
+    connectorXmlLines.push('            <EndArrow>4</EndArrow>'); // 4 = Standard solid filled arrowhead
+    connectorXmlLines.push('            <EndArrowSize>2</EndArrowSize>'); // 2 = Standard medium arrowhead
     connectorXmlLines.push('          </Line>');
     if (edgeLabel) {
       connectorXmlLines.push('          <TextBlock>');
@@ -445,7 +473,7 @@ export function generateVisioVdx(
     connectorXmlLines.push('        </Shape>');
 
     // Glue connections to boundary connection points:
-    // ToPart = 100 + connection_point_index (Row 0: 100, Row 1: 101, Row 2: 102, Row 3: 103)
+    // ToPart = 100 + connection_point_index (Row 0 / Top: 100, Row 1 / Bottom: 101, Row 2 / Left: 102, Row 3 / Right: 103)
     // FromPart = 9 for BeginX, 12 for EndX
     edgeConnectLines.push(`        <Connect FromSheet="${shapeId}" FromCell="BeginX" FromPart="9" ToSheet="${sourceShapeId}" ToCell="Connections.X${sourcePort.connIdx + 1}" ToPart="${100 + sourcePort.connIdx}"/>`);
     edgeConnectLines.push(`        <Connect FromSheet="${shapeId}" FromCell="EndX" FromPart="12" ToSheet="${targetShapeId}" ToCell="Connections.X${targetPort.connIdx + 1}" ToPart="${100 + targetPort.connIdx}"/>`);
@@ -471,17 +499,27 @@ export function generateVisioVdx(
     nodeXmlLines.push(`            <PinX>${cx.toFixed(4)}</PinX>`);
     nodeXmlLines.push(`            <PinY>${cy.toFixed(4)}</PinY>`);
     nodeXmlLines.push(`            <Width>${wIn.toFixed(4)}</Width>`);
-    // Dynamic height calculation in Visio ShapeSheet: TEXTHEIGHT(TheText, Width)
-    nodeXmlLines.push(`            <Height F="MAX(${hIn.toFixed(4)},TEXTHEIGHT(TheText,Width))">${hIn.toFixed(4)}</Height>`);
+    // Static evaluated height so third-party viewers never fail or collapse text
+    nodeXmlLines.push(`            <Height>${hIn.toFixed(4)}</Height>`);
     nodeXmlLines.push(`            <LocPinX F="Width*0.5">${(wIn / 2).toFixed(4)}</LocPinX>`);
     nodeXmlLines.push(`            <LocPinY F="Height*0.5">${(hIn / 2).toFixed(4)}</LocPinY>`);
     nodeXmlLines.push('            <Angle>0</Angle>');
     nodeXmlLines.push('          </XForm>');
+    // Explicit TxtXForm locks text block width to shape width, preventing single-character column collapse
+    nodeXmlLines.push('          <TxtXForm>');
+    nodeXmlLines.push(`            <TxtPinX F="Width*0.5">${(wIn / 2).toFixed(4)}</TxtPinX>`);
+    nodeXmlLines.push(`            <TxtPinY F="Height*0.5">${(hIn / 2).toFixed(4)}</TxtPinY>`);
+    nodeXmlLines.push(`            <TxtWidth F="Width*1">${wIn.toFixed(4)}</TxtWidth>`);
+    nodeXmlLines.push(`            <TxtHeight F="Height*1">${hIn.toFixed(4)}</TxtHeight>`);
+    nodeXmlLines.push(`            <TxtLocPinX F="TxtWidth*0.5">${(wIn / 2).toFixed(4)}</TxtLocPinX>`);
+    nodeXmlLines.push(`            <TxtLocPinY F="TxtHeight*0.5">${(hIn / 2).toFixed(4)}</TxtLocPinY>`);
+    nodeXmlLines.push('            <TxtAngle>0</TxtAngle>');
+    nodeXmlLines.push('          </TxtXForm>');
     nodeXmlLines.push('          <TextBlock>');
-    nodeXmlLines.push('            <LeftMargin Unit="PT">6</LeftMargin>');
-    nodeXmlLines.push('            <RightMargin Unit="PT">6</RightMargin>');
-    nodeXmlLines.push('            <TopMargin Unit="PT">6</TopMargin>');
-    nodeXmlLines.push('            <BottomMargin Unit="PT">6</BottomMargin>');
+    nodeXmlLines.push('            <LeftMargin Unit="PT">5</LeftMargin>');
+    nodeXmlLines.push('            <RightMargin Unit="PT">5</RightMargin>');
+    nodeXmlLines.push('            <TopMargin Unit="PT">5</TopMargin>');
+    nodeXmlLines.push('            <BottomMargin Unit="PT">5</BottomMargin>');
     nodeXmlLines.push('            <VerticalAlign>1</VerticalAlign>');
     nodeXmlLines.push('            <TextBkgnd>0</TextBkgnd>');
     nodeXmlLines.push('          </TextBlock>');
@@ -506,7 +544,7 @@ export function generateVisioVdx(
       nodeXmlLines.push('          </Paragraph>');
       nodeXmlLines.push('          <Paragraph IX="1">');
       nodeXmlLines.push('            <HorzAlign>1</HorzAlign>');
-      nodeXmlLines.push('            <SpLine Unit="PT">-9</SpLine>');
+      nodeXmlLines.push('            <SpLine Unit="PT">-10</SpLine>');
       nodeXmlLines.push('          </Paragraph>');
       nodeXmlLines.push('          <Character IX="0">');
       nodeXmlLines.push('            <Font>1</Font>');
@@ -534,7 +572,7 @@ export function generateVisioVdx(
     }
 
     // 4 Cardinal Connection Points for smart connector snapping
-    // Index 0: Top, Index 1: Bottom, Index 2: Left, Index 3: Right
+    // Index 0: Top (Connections.X1), Index 1: Bottom (Connections.X2), Index 2: Left (Connections.X3), Index 3: Right (Connections.X4)
     nodeXmlLines.push('          <Connection IX="0">');
     nodeXmlLines.push(`            <X F="Width*0.5">${(wIn / 2).toFixed(4)}</X>`);
     nodeXmlLines.push(`            <Y F="Height*1">${hIn.toFixed(4)}</Y>`);
@@ -665,7 +703,7 @@ export function generateVisioVdx(
         <LineColor>#334155</LineColor>
         <LinePattern>1</LinePattern>
         <EndArrow>4</EndArrow>
-        <EndArrowSize>1</EndArrowSize>
+        <EndArrowSize>2</EndArrowSize>
       </Line>
       <Fill>
         <FillPattern>0</FillPattern>
@@ -687,7 +725,7 @@ export function generateVisioVdx(
   <Masters>
     <Master ID="1" NameU="Dynamic connector" Name="Dynamic connector" Prompt="Connects two shapes." MatchByName="0" IconSize="1" AlignName="2" PatternFlags="0">
       <Shapes>
-        <Shape ID="5" Type="Shape" LineStyle="4" TextStyle="4">
+        <Shape ID="1" Type="Shape" LineStyle="4" TextStyle="4">
           <XForm>
             <PinX>0</PinX>
             <PinY>0</PinY>
@@ -716,7 +754,7 @@ export function generateVisioVdx(
             <LineColor>#334155</LineColor>
             <LinePattern>1</LinePattern>
             <EndArrow>4</EndArrow>
-            <EndArrowSize>1</EndArrowSize>
+            <EndArrowSize>2</EndArrowSize>
           </Line>
           <Geom IX="0">
             <NoFill>1</NoFill>
