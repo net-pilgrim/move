@@ -23,7 +23,8 @@
     FileUp,
     FolderDown,
     Save,
-    Workflow
+    Workflow,
+    Layers
   } from '@lucide/svelte';
 
   import { nodeTypes } from './components/nodes';
@@ -38,18 +39,24 @@
   import AuthButton from './components/AuthButton.svelte';
   import ClerkConfigModal from './components/ClerkConfigModal.svelte';
   import LoginGate from './components/LoginGate.svelte';
+  import ScratchWorkspace from './components/scratch/ScratchWorkspace.svelte';
   import { auth, isAuthFeatureEnabled } from './lib/auth/clerk.svelte';
 
   import { generateVxml } from './lib/vxml/generator';
   import { parseVxml } from './lib/vxml/parser';
   import { validateVxml } from './lib/vxml/validator';
   import { autoLayoutNodes } from './lib/vxml/layout';
+  import { flowToScratch, scratchToFlow, scratchToVxml } from './lib/scratch/scratch-engine';
   import { TEMPLATES } from './lib/templates/templates';
   import { IvrSimulator, type SimulatorState } from './lib/simulator/ivr-engine';
   import { xmlToSrgs } from './lib/grammar/srgs';
   import { generateVisioVdx } from './lib/visio/visio-export';
   import type { VxmlDocSettings, VxmlNodeType, FieldNodeData } from './types/vxml';
+  import type { ScratchBlock } from './types/scratch';
   import type { ParseResult } from './lib/vxml/parser';
+
+  type EditorViewMode = 'flow' | 'scratch';
+  let activeViewMode = $state<EditorViewMode>('flow');
 
   // Initialize with the Customer Support Router template
   const initialTemplate = TEMPLATES[0];
@@ -57,6 +64,7 @@
   let nodes = $state.raw<Node[]>(JSON.parse(JSON.stringify(initialTemplate.nodes)));
   let edges = $state.raw<Edge[]>(JSON.parse(JSON.stringify(initialTemplate.edges)));
   let docSettings = $state<VxmlDocSettings>(JSON.parse(JSON.stringify(initialTemplate.settings)));
+  let scratchBlocks = $state<ScratchBlock[]>(flowToScratch(initialTemplate.nodes, initialTemplate.edges));
 
   let selectedNode = $state<Node | null>(null);
   let isSidebarCollapsed = $state(false);
@@ -120,7 +128,39 @@
 
   // Diagnostics and Code generation (derived)
   let diagnostics = $derived(validateVxml(nodes, edges, docSettings));
-  let generatedVxml = $derived(generateVxml(nodes, edges, docSettings));
+  let generatedVxml = $derived(
+    activeViewMode === 'scratch'
+      ? scratchToVxml(scratchBlocks, docSettings)
+      : generateVxml(nodes, edges, docSettings)
+  );
+
+  function switchViewMode(mode: EditorViewMode) {
+    if (mode === activeViewMode) return;
+    if (mode === 'scratch') {
+      scratchBlocks = flowToScratch(nodes, edges);
+      showToast('Switched to Scratch Block editor');
+    } else {
+      const flowData = scratchToFlow(scratchBlocks);
+      nodes = flowData.nodes;
+      edges = flowData.edges;
+      showToast('Switched to Flow Canvas');
+    }
+    activeViewMode = mode;
+  }
+
+  function handleScratchChange() {
+    const flowData = scratchToFlow(scratchBlocks);
+    nodes = flowData.nodes;
+    edges = flowData.edges;
+  }
+
+  function handleRunSimulatorFromScratch() {
+    const flowData = scratchToFlow(scratchBlocks);
+    nodes = flowData.nodes;
+    edges = flowData.edges;
+    showSimulator = true;
+    ivrSimulator.startCall();
+  }
 
   let errorCount = $derived(diagnostics.filter((d) => d.severity === 'error').length);
   let warningCount = $derived(diagnostics.filter((d) => d.severity === 'warning').length);
@@ -442,6 +482,7 @@
     edges = JSON.parse(JSON.stringify(t.edges));
     docSettings = JSON.parse(JSON.stringify(t.settings));
     selectedNode = null;
+    scratchBlocks = flowToScratch(nodes, edges);
     showToast(`Loaded "${t.name}" template.`);
   }
 
@@ -538,6 +579,7 @@
       edges = result.edges;
       docSettings = result.settings;
       selectedNode = null;
+      scratchBlocks = flowToScratch(nodes, edges);
       showToast(`Imported ${result.nodes.length} dialog elements from ${file.name}`);
     };
 
@@ -550,6 +592,7 @@
     edges = result.edges;
     docSettings = result.settings;
     selectedNode = null;
+    scratchBlocks = flowToScratch(nodes, edges);
     showToast(`Imported ${result.nodes.length} elements from markup.`);
   }
 
@@ -624,15 +667,44 @@
 
     <!-- Center: Toolbar Controls -->
     <div class="flex items-center gap-2">
-      <!-- Auto Layout -->
-      <button
-        onclick={handleAutoLayout}
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
-        title="Automatically arrange nodes neatly"
-      >
-        <LayoutGrid class="w-3.5 h-3.5 text-slate-400" />
-        <span>Auto Layout</span>
-      </button>
+      <!-- Mode Switcher: Flow vs Scratch -->
+      <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-700/80 shadow-inner mr-1">
+        <button
+          type="button"
+          onclick={() => switchViewMode('flow')}
+          class="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all {activeViewMode === 'flow'
+            ? 'bg-indigo-600 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-200'}"
+          title="Node Graph Flow View"
+        >
+          <Workflow class="w-3.5 h-3.5" />
+          <span>Flow</span>
+        </button>
+
+        <button
+          type="button"
+          onclick={() => switchViewMode('scratch')}
+          class="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all {activeViewMode === 'scratch'
+            ? 'bg-amber-600 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-200'}"
+          title="Scratch Block-Based UI"
+        >
+          <Layers class="w-3.5 h-3.5" />
+          <span>Scratch</span>
+        </button>
+      </div>
+
+      {#if activeViewMode === 'flow'}
+        <!-- Auto Layout -->
+        <button
+          onclick={handleAutoLayout}
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+          title="Automatically arrange nodes neatly"
+        >
+          <LayoutGrid class="w-3.5 h-3.5 text-slate-400" />
+          <span>Auto Layout</span>
+        </button>
+      {/if}
 
       <!-- Templates Dropdown -->
       <div class="relative flex items-center">
@@ -769,61 +841,70 @@
     </div>
   </header>
 
-  <!-- Main Work Area: Left Toolbar + Svelte Flow Canvas + Right Inspector -->
-  <div class="flex-1 flex w-full h-[calc(100vh-3.5rem)] relative overflow-hidden">
-    <!-- Left Toolbar: Node Palette with Drag & Drop -->
-    <LeftSidebar
-      bind:isCollapsed={isSidebarCollapsed}
-      onAddNode={handleAddNode}
+  <!-- Main Work Area: Scratch Workspace OR (Left Toolbar + Svelte Flow Canvas + Right Inspector) -->
+  {#if activeViewMode === 'scratch'}
+    <ScratchWorkspace
+      bind:blocks={scratchBlocks}
+      {docSettings}
+      onChange={handleScratchChange}
+      onRunSimulator={handleRunSimulatorFromScratch}
     />
+  {:else}
+    <div class="flex-1 flex w-full h-[calc(100vh-3.5rem)] relative overflow-hidden">
+      <!-- Left Toolbar: Node Palette with Drag & Drop -->
+      <LeftSidebar
+        bind:isCollapsed={isSidebarCollapsed}
+        onAddNode={handleAddNode}
+      />
 
-    <!-- Visual Svelte Flow Canvas -->
-    <div
-      role="region"
-      aria-label="Flowchart canvas"
-      class="flex-1 h-full w-full relative bg-slate-950"
-      ondragover={handleCanvasDragOver}
-      ondrop={handleCanvasDrop}
-    >
-      <SvelteFlow
-        bind:nodes
-        bind:edges
-        {nodeTypes}
-        deleteKey={['Delete', 'Backspace']}
-        onbeforedelete={handleBeforeDelete}
-        ondelete={handleDeleteElements}
-        onconnect={handleConnect}
-        onnodeclick={handleNodeClick}
-        onedgeclick={handleEdgeClick}
-        onpaneclick={handlePaneClick}
-        fitView
-        colorMode="dark"
+      <!-- Visual Svelte Flow Canvas -->
+      <div
+        role="region"
+        aria-label="Flowchart canvas"
+        class="flex-1 h-full w-full relative bg-slate-950"
+        ondragover={handleCanvasDragOver}
+        ondrop={handleCanvasDrop}
       >
-        <Background gap={18} size={1.2} patternColor="#334155" />
-        <Controls position="bottom-left" />
-      </SvelteFlow>
+        <SvelteFlow
+          bind:nodes
+          bind:edges
+          {nodeTypes}
+          deleteKey={['Delete', 'Backspace']}
+          onbeforedelete={handleBeforeDelete}
+          ondelete={handleDeleteElements}
+          onconnect={handleConnect}
+          onnodeclick={handleNodeClick}
+          onedgeclick={handleEdgeClick}
+          onpaneclick={handlePaneClick}
+          fitView
+          colorMode="dark"
+        >
+          <Background gap={18} size={1.2} patternColor="#334155" />
+          <Controls position="bottom-left" />
+        </SvelteFlow>
 
-      <!-- Toast Notification Alert -->
-      {#if toastMessage}
-        <div class="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-slate-900/95 border border-indigo-500/40 text-indigo-200 text-xs font-medium shadow-2xl flex items-center gap-2 backdrop-blur-sm animate-fade-in">
-          <Check class="w-3.5 h-3.5 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
+        <!-- Toast Notification Alert -->
+        {#if toastMessage}
+          <div class="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-slate-900/95 border border-indigo-500/40 text-indigo-200 text-xs font-medium shadow-2xl flex items-center gap-2 backdrop-blur-sm animate-fade-in">
+            <Check class="w-3.5 h-3.5 text-emerald-400" />
+            <span>{toastMessage}</span>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Contextual Node Inspector Sidebar -->
+      {#if selectedNode}
+        <Inspector
+          {selectedNode}
+          onUpdateNode={handleUpdateNode}
+          onDeleteNode={handleDeleteNode}
+          onDuplicateNode={handleDuplicateNode}
+          onOpenGrammarEditor={handleOpenGrammarStudio}
+          onClose={() => (selectedNode = null)}
+        />
       {/if}
     </div>
-
-    <!-- Contextual Node Inspector Sidebar -->
-    {#if selectedNode}
-      <Inspector
-        {selectedNode}
-        onUpdateNode={handleUpdateNode}
-        onDeleteNode={handleDeleteNode}
-        onDuplicateNode={handleDuplicateNode}
-        onOpenGrammarEditor={handleOpenGrammarStudio}
-        onClose={() => (selectedNode = null)}
-      />
-    {/if}
-  </div>
+  {/if}
 
   <!-- Modals & Overlays -->
   <CodeModal
