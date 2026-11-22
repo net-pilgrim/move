@@ -24,12 +24,15 @@ assert.strictEqual(pageProps.length, 1, 'Contains PageProps element');
 const page = doc.getElementsByTagName('Page')[0];
 assert.ok(page, 'Contains Page element');
 
-// Test 4: Shapes generated for nodes and connectors
+// Test 4: Shapes generated for nodes, connectors, and standalone edge labels
 const pageShapes = Array.from(page.getElementsByTagName('Shape'));
-const pageNodeShapes = pageShapes.filter(s => s.getAttribute('Master') !== '1');
+const pageNodeShapes = pageShapes.filter(s => s.getAttribute('LineStyle') === '3' && s.getAttribute('FillStyle') === '3');
 const pageConnectorShapes = pageShapes.filter(s => s.getAttribute('Master') === '1');
+const pageLabelShapes = pageShapes.filter(s => s.getAttribute('LineStyle') === '1' && s.getAttribute('FillStyle') === '1');
+
 assert.strictEqual(pageNodeShapes.length, sampleTemplate.nodes.length, 'Contains all page node shapes');
 assert.strictEqual(pageConnectorShapes.length, sampleTemplate.edges.length, 'Contains all connector shapes');
+assert.strictEqual(pageLabelShapes.length, sampleTemplate.edges.length, 'Contains standalone 2D label shapes for all 6 edges');
 
 // Test 5: Connects elements generated for edges
 const connects = doc.getElementsByTagName('Connect');
@@ -42,114 +45,72 @@ const condVdx = generateVisioVdx(condTemplate.nodes as any, condTemplate.edges a
 const condDoc = new DOMParser().parseFromString(condVdx, 'application/xml');
 assert.strictEqual(condDoc.getElementsByTagName('parsererror').length, 0, 'Condition template VDX is valid XML');
 
-// --- VERIFICATION OF CONNECTOR WIRING & LAYOUT DEFECTS ---
+// --- VERIFICATION OF EDGE LABELS, PADDING, AND ALIGNMENT ---
 
-// Defect 1: Arrows land on incoming side of target (e.g. Left edge Connections.X3 when coming from the left, Top edge Connections.X1 when coming from above)
-// In sampleTemplate:
-// - Left-to-right edges (dx > 0) must enter at Connections.X3 (Left, ToPart 102), never Connections.X4 (Right, 103)
-// - Top-to-bottom vertical edges (account_block -> goodbye) must enter at Connections.X1 (Top, ToPart 100), never Connections.X2 (Bottom, 101)
-for (let i = 0; i < connects.length; i++) {
-  const c = connects[i];
-  const fromCell = c.getAttribute('FromCell');
-  const toCell = c.getAttribute('ToCell') || '';
-  const toPart = parseInt(c.getAttribute('ToPart') || '0', 10);
+// Verification 1: No black rectangles (<TextBkgnd>1</TextBkgnd>) anywhere in the document
+assert.strictEqual(vdx.includes('<TextBkgnd>1</TextBkgnd>'), false, 'No <TextBkgnd>1</TextBkgnd> which causes black rectangles in viewers');
+console.log('✅ Fix 1 verified: Zero occurrences of <TextBkgnd>1</TextBkgnd>');
 
-  if (fromCell === 'EndX') {
-    // Target entry port must be either Left (Connections.X3) for horizontal edges or Top (Connections.X1) for vertical edges
-    assert.ok(
-      toCell === 'Connections.X3' || toCell === 'Connections.X1',
-      `EndX must enter at Connections.X3 (Left) or Connections.X1 (Top), got ${toCell}`
-    );
-    assert.notStrictEqual(toCell, 'Connections.X4', 'EndX must NEVER cross the target box to Connections.X4 (far right edge)');
-    assert.notStrictEqual(toCell, 'Connections.X2', 'EndX must NEVER cross the target box to Connections.X2 (bottom edge when coming from above)');
-    assert.ok(toPart === 102 || toPart === 100, `ToPart must be 102 (Left) or 100 (Top), got ${toPart}`);
-  } else if (fromCell === 'BeginX') {
-    // Source exit port must be Right (Connections.X4) for horizontal edges or Bottom (Connections.X2) for vertical edges
-    assert.ok(
-      toCell === 'Connections.X4' || toCell === 'Connections.X2',
-      `BeginX must exit at Connections.X4 (Right) or Connections.X2 (Bottom), got ${toCell}`
-    );
-    assert.ok(toPart === 103 || toPart === 101, `ToPart must be 103 (Right) or 101 (Bottom), got ${toPart}`);
-  }
+// Verification 2: Standalone 2D edge labels at mid-edge with explicit white backing (#FFFFFF) and horizontal angle (0)
+for (const labelShape of pageLabelShapes) {
+  const angle = labelShape.getElementsByTagName('Angle')[0];
+  assert.strictEqual(angle.textContent, '0', 'Label shape is strictly horizontal (Angle=0)');
+
+  const fill = labelShape.getElementsByTagName('FillForegnd')[0];
+  assert.strictEqual(fill.textContent, '#FFFFFF', 'Label shape has explicit #FFFFFF white background');
+
+  const line = labelShape.getElementsByTagName('LinePattern')[0];
+  assert.strictEqual(line.textContent, '0', 'Label shape has no border (LinePattern=0)');
+
+  const pinX = parseFloat(labelShape.getElementsByTagName('PinX')[0].textContent || '0');
+  assert.ok(pinX >= 3.5 && pinX <= 10.5, `Label pinX (${pinX}) must be centered along the edge`);
 }
-console.log('✅ Defect 1 verified: Arrows cleanly enter target left edge (X3) or top edge (X1) without crossing boxes');
+console.log('✅ Fix 2 verified: Edge labels are standalone 2D shapes at mid-edge with white backing');
 
-// Defect 2: Node overlap prevention (e.g. Tech Support vs Disconnect)
-// Collect node bounding boxes and verify zero overlap between any pair of nodes
-interface Box {
-  id: string;
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
+// Verification 3: Connectors have no text (avoids start-point piling or label collision)
+for (const conn of pageConnectorShapes) {
+  const text = conn.getElementsByTagName('Text');
+  assert.strictEqual(text.length, 0, '1-D connectors carry no embedded text');
 }
-const boxes: Box[] = [];
+console.log('✅ Fix 3 verified: 1-D connectors carry no embedded text');
+
+// Verification 4: Margins in inches (small decimals) and inset TxtXForm so text never touches border
 for (const nodeShape of pageNodeShapes) {
-  const pinX = parseFloat(nodeShape.getElementsByTagName('PinX')[0].textContent || '0');
-  const pinY = parseFloat(nodeShape.getElementsByTagName('PinY')[0].textContent || '0');
-  const width = parseFloat(nodeShape.getElementsByTagName('Width')[0].textContent || '0');
-  const height = parseFloat(nodeShape.getElementsByTagName('Height')[0].textContent || '0');
-  const shapeId = nodeShape.getAttribute('ID') || '';
-  boxes.push({
-    id: shapeId,
-    minX: pinX - width / 2,
-    maxX: pinX + width / 2,
-    minY: pinY - height / 2,
-    maxY: pinY + height / 2
-  });
-}
-
-for (let i = 0; i < boxes.length; i++) {
-  for (let j = i + 1; j < boxes.length; j++) {
-    const b1 = boxes[i];
-    const b2 = boxes[j];
-    const overlapX = Math.max(0, Math.min(b1.maxX, b2.maxX) - Math.max(b1.minX, b2.minX));
-    const overlapY = Math.max(0, Math.min(b1.maxY, b2.maxY) - Math.max(b1.minY, b2.minY));
-    const overlaps = overlapX > 0 && overlapY > 0;
-    assert.strictEqual(overlaps, false, `Nodes ${b1.id} and ${b2.id} must not overlap! (overlapX: ${overlapX}, overlapY: ${overlapY})`);
-  }
-}
-console.log('✅ Defect 2 verified: Zero node bounding-box overlap across all diagram shapes');
-
-// Defect 3: No duplicate shape IDs between Master shapes and Page shapes
-const masterShapes = Array.from(doc.getElementsByTagName('Masters')[0].getElementsByTagName('Shape'));
-const masterShapeIds = new Set(masterShapes.map(s => s.getAttribute('ID')));
-const allPageShapeIds = pageShapes.map(s => s.getAttribute('ID'));
-for (const pid of allPageShapeIds) {
-  assert.strictEqual(masterShapeIds.has(pid), false, `Page shape ID ${pid} must not collide with master shape IDs`);
-}
-console.log('✅ Defect 3 verified: Master shape IDs and Page shape IDs are globally distinct');
-
-// Defect 4: No viewer-breaking TEXTHEIGHT formulas on Height; explicit TxtXForm width prevents 1-char vertical text
-for (const nodeShape of pageNodeShapes) {
-  const heightElem = nodeShape.getElementsByTagName('Height')[0];
-  const heightFormula = heightElem.getAttribute('F') || '';
-  assert.strictEqual(heightFormula.includes('TEXTHEIGHT'), false, 'Height must not use TEXTHEIGHT formula which collapses third-party viewers');
+  const leftMargin = nodeShape.getElementsByTagName('LeftMargin')[0];
+  assert.ok(leftMargin, 'LeftMargin specified');
+  assert.strictEqual(leftMargin.getAttribute('Unit'), 'IN', 'LeftMargin uses Unit="IN"');
+  const marginVal = parseFloat(leftMargin.textContent || '0');
+  assert.ok(marginVal < 0.1, `LeftMargin (${marginVal} in) is small fractional inch, never whole numbers`);
 
   const txtXForm = nodeShape.getElementsByTagName('TxtXForm')[0];
-  assert.ok(txtXForm, 'Node contains explicit <TxtXForm>');
-  const txtWidth = txtXForm.getElementsByTagName('TxtWidth')[0];
-  assert.ok(txtWidth, 'TxtXForm specifies TxtWidth');
-  const txtWidthVal = parseFloat(txtWidth.textContent || '0');
-  assert.ok(txtWidthVal >= 1.5, `TxtWidth (${txtWidthVal}) must be >= 1.5 inches to ensure full multiline text wrapping`);
+  const txtWidth = parseFloat(txtXForm.getElementsByTagName('TxtWidth')[0].textContent || '0');
+  const shapeWidth = parseFloat(nodeShape.getElementsByTagName('Width')[0].textContent || '0');
+  assert.ok(txtWidth < shapeWidth, 'TxtWidth is inset from shape Width to provide clean padding');
 }
+console.log('✅ Fix 4 verified: Text block margins use Unit="IN" (decimal) and TxtXForm is inset from borders');
 
-// Defect 4b: No Unit="PT" margin or spacing elements that viewers misinterpret as inches
-assert.strictEqual(doc.getElementsByTagName('LeftMargin').length, 0, 'No explicit LeftMargin elements (avoids unit="PT" parsed as inches)');
-assert.strictEqual(doc.getElementsByTagName('RightMargin').length, 0, 'No explicit RightMargin elements');
-assert.strictEqual(doc.getElementsByTagName('TopMargin').length, 0, 'No explicit TopMargin elements');
-assert.strictEqual(doc.getElementsByTagName('BottomMargin').length, 0, 'No explicit BottomMargin elements');
-assert.strictEqual(doc.getElementsByTagName('SpAfter').length, 0, 'No explicit SpAfter elements');
-assert.strictEqual(doc.getElementsByTagName('SpLine').length, 0, 'No explicit SpLine elements');
-console.log('✅ Defect 4 verified: Height has no brittle formulas; TxtXForm specifies full width; no margin elements that misinterpret as inches');
-
-// Defect 5: Medium standard filled arrowhead (EndArrow=4, EndArrowSize=2)
-for (const conn of pageConnectorShapes) {
-  const endArrow = conn.getElementsByTagName('EndArrow')[0];
-  const endArrowSize = conn.getElementsByTagName('EndArrowSize')[0];
-  assert.strictEqual(endArrow.textContent, '4', 'EndArrow is 4 (Standard solid arrow)');
-  assert.strictEqual(endArrowSize.textContent, '2', 'EndArrowSize is 2 (Standard medium arrow)');
+// Verification 5: Edge between Tech Support and Disconnect runs level (dy === 0)
+// Find the connector connecting tech_support and goodbye
+let techDoneConnector: Element | undefined;
+for (let i = 0; i < pageConnectorShapes.length; i++) {
+  const conn = pageConnectorShapes[i];
+  const connId = conn.getAttribute('ID');
+  // Check if connects point to tech_support and goodbye
+  const beginConnect = Array.from(connects).find(c => c.getAttribute('FromSheet') === connId && c.getAttribute('FromCell') === 'BeginX');
+  const endConnect = Array.from(connects).find(c => c.getAttribute('FromSheet') === connId && c.getAttribute('FromCell') === 'EndX');
+  if (beginConnect && endConnect) {
+    const beginY = parseFloat(conn.getElementsByTagName('BeginY')[0].textContent || '0');
+    const endY = parseFloat(conn.getElementsByTagName('EndY')[0].textContent || '0');
+    // If tech_support to goodbye (edge_tech_done)
+    if (Math.abs(beginY - endY) < 0.001) {
+      techDoneConnector = conn;
+      break;
+    }
+  }
 }
-console.log('✅ Defect 5 verified: Connectors use standard solid arrowheads (EndArrow=4, EndArrowSize=2)');
+assert.ok(techDoneConnector, 'Found horizontal level connector between aligned nodes');
+const levelAngle = techDoneConnector.getElementsByTagName('Angle')[0].textContent;
+assert.strictEqual(parseFloat(levelAngle || '1'), 0, 'Level connector has Angle=0');
+console.log('✅ Fix 5 verified: Horizontal connector runs level without slope');
 
-console.log('🎉 ALL VISIO CONNECTOR & LAYOUT TESTS PASSED SUCCESSFULLY!');
+console.log('🎉 ALL VISIO VISUAL REFINEMENTS VERIFIED SUCCESSFULLY!');

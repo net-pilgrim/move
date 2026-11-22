@@ -297,8 +297,6 @@ export function generateVisioVdx(
   }
 
   // Scale factor: 96 canvas pixels = 1.0 inch in Visio
-  // 96 DPI provides generous spacing between flowchart columns (e.g. 370px = 3.85 inches)
-  // completely preventing any node overlap while keeping diagram compact and readable.
   const DPI = 96;
 
   const contentWidthIn = Math.max((maxX - minX) / DPI + 2.5, 8.5);
@@ -369,8 +367,10 @@ export function generateVisioVdx(
     }
   }
 
-  // Generate Connector XML lines first (so connectors render behind nodes in drawing order)
+  // Generate Connector XML lines and standalone 2D Label XML lines
+  // Drawing order in <Shapes>: Connectors -> Labels -> Nodes
   const connectorXmlLines: string[] = [];
+  const labelXmlLines: string[] = [];
   const edgeConnectLines: string[] = [];
 
   for (const edge of edges) {
@@ -390,10 +390,17 @@ export function generateVisioVdx(
     const sourcePort = getSourceExitPort(sourceCenter, targetCenter);
     const targetPort = getTargetEntryPort(sourceCenter, targetCenter);
 
-    const x1 = sourcePort.x;
-    const y1 = sourcePort.y;
-    const x2 = targetPort.x;
-    const y2 = targetPort.y;
+    let x1 = sourcePort.x;
+    let y1 = sourcePort.y;
+    let x2 = targetPort.x;
+    let y2 = targetPort.y;
+
+    // Level horizontal connectors when ports are nearly horizontal (eliminates subtle slants)
+    if (sourcePort.connIdx === 3 && targetPort.connIdx === 2 && Math.abs(y1 - y2) <= 0.25) {
+      const avgY = Math.round(((y1 + y2) / 2) * 1000) / 1000;
+      y1 = avgY;
+      y2 = avgY;
+    }
 
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
@@ -402,12 +409,9 @@ export function generateVisioVdx(
     const length = Math.max(Math.sqrt(dx * dx + dy * dy), 0.05);
     const angleRad = Math.atan2(dy, dx);
 
-    const edgeLabel = edge.label ? String(edge.label) : (edge.sourceHandle || '');
-    const labelWidthIn = Math.max(1.0, edgeLabel.length * 0.08 + 0.3);
-    const labelHeightIn = 0.3;
-
+    // 1-D Pure Dynamic Connector (no embedded text/TextBkgnd to avoid viewer start-point piling or black box)
     connectorXmlLines.push(`        <!-- 1-D Dynamic Connector: ${escapeXml(edge.id)} (${edge.source} -> ${edge.target}) -->`);
-    connectorXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" Master="1" LineStyle="4" TextStyle="4">`);
+    connectorXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" Master="1" LineStyle="4">`);
     connectorXmlLines.push('          <XForm>');
     connectorXmlLines.push(`            <PinX F="(BeginX+EndX)/2">${midX.toFixed(4)}</PinX>`);
     connectorXmlLines.push(`            <PinY F="(BeginY+EndY)/2">${midY.toFixed(4)}</PinY>`);
@@ -433,32 +437,6 @@ export function generateVisioVdx(
     connectorXmlLines.push('            <EndArrow>4</EndArrow>'); // 4 = Standard solid filled arrowhead
     connectorXmlLines.push('            <EndArrowSize>2</EndArrowSize>'); // 2 = Standard medium arrowhead
     connectorXmlLines.push('          </Line>');
-    if (edgeLabel) {
-      connectorXmlLines.push('          <TextBlock>');
-      connectorXmlLines.push('            <VerticalAlign>1</VerticalAlign>');
-      connectorXmlLines.push('            <TextBkgnd>1</TextBkgnd>'); // Solid background so connector doesn't strike through text
-      connectorXmlLines.push('          </TextBlock>');
-      connectorXmlLines.push('          <TxtXForm>');
-      connectorXmlLines.push(`            <TxtPinX F="Width*0.5">${(length / 2).toFixed(4)}</TxtPinX>`);
-      connectorXmlLines.push('            <TxtPinY F="Height*0.5">0.1</TxtPinY>');
-      // TxtAngle counteracts connector angle to keep text strictly horizontal relative to page
-      connectorXmlLines.push(`            <TxtAngle F="-Angle">${(-angleRad).toFixed(4)}</TxtAngle>`);
-      connectorXmlLines.push(`            <TxtLocPinX F="TxtWidth*0.5">${(labelWidthIn / 2).toFixed(4)}</TxtLocPinX>`);
-      connectorXmlLines.push(`            <TxtLocPinY F="TxtHeight*0.5">${(labelHeightIn / 2).toFixed(4)}</TxtLocPinY>`);
-      connectorXmlLines.push(`            <TxtWidth>${labelWidthIn.toFixed(4)}</TxtWidth>`);
-      connectorXmlLines.push(`            <TxtHeight>${labelHeightIn.toFixed(4)}</TxtHeight>`);
-      connectorXmlLines.push('          </TxtXForm>');
-      connectorXmlLines.push(`          <Text><cp IX="0"/><pp IX="0"/>${escapeXml(edgeLabel)}</Text>`);
-      connectorXmlLines.push('          <Paragraph IX="0">');
-      connectorXmlLines.push('            <HorzAlign>1</HorzAlign>');
-      connectorXmlLines.push('          </Paragraph>');
-      connectorXmlLines.push('          <Character IX="0">');
-      connectorXmlLines.push('            <Font>1</Font>');
-      connectorXmlLines.push('            <Color>#0F172A</Color>');
-      connectorXmlLines.push('            <Size Unit="PT">7.5</Size>');
-      connectorXmlLines.push('            <Style>1</Style>');
-      connectorXmlLines.push('          </Character>');
-    }
     connectorXmlLines.push('          <Geom IX="0">');
     connectorXmlLines.push('            <NoFill>1</NoFill>');
     connectorXmlLines.push('            <NoLine>0</NoLine>');
@@ -467,6 +445,55 @@ export function generateVisioVdx(
     connectorXmlLines.push(`            <LineTo IX="2"><X F="Width*1">${length.toFixed(4)}</X><Y>0</Y></LineTo>`);
     connectorXmlLines.push('          </Geom>');
     connectorXmlLines.push('        </Shape>');
+
+    // Dedicated 2D Edge Label Shape placed at mid-edge
+    // Guarantees:
+    // 1. Perfectly horizontal text at mid-edge across ALL viewers (no pile-up at the edge start)
+    // 2. Explicit hex white #FFFFFF backing to cleanly mask the line (no palette index 1 turning into black box)
+    const edgeLabel = edge.label ? String(edge.label) : (edge.sourceHandle || '');
+    if (edgeLabel) {
+      const labelShapeId = currentShapeId++;
+      const labelWidthIn = Math.max(0.85, edgeLabel.length * 0.08 + 0.25);
+      const labelHeightIn = 0.22;
+
+      labelXmlLines.push(`        <!-- Edge Label: ${escapeXml(edge.id)} -->`);
+      labelXmlLines.push(`        <Shape ID="${labelShapeId}" Type="Shape" LineStyle="1" FillStyle="1" TextStyle="3">`);
+      labelXmlLines.push('          <XForm>');
+      labelXmlLines.push(`            <PinX>${midX.toFixed(4)}</PinX>`);
+      labelXmlLines.push(`            <PinY>${midY.toFixed(4)}</PinY>`);
+      labelXmlLines.push(`            <Width>${labelWidthIn.toFixed(4)}</Width>`);
+      labelXmlLines.push(`            <Height>${labelHeightIn.toFixed(4)}</Height>`);
+      labelXmlLines.push(`            <LocPinX F="Width*0.5">${(labelWidthIn / 2).toFixed(4)}</LocPinX>`);
+      labelXmlLines.push(`            <LocPinY F="Height*0.5">${(labelHeightIn / 2).toFixed(4)}</LocPinY>`);
+      labelXmlLines.push('            <Angle>0</Angle>'); // Strictly level/horizontal
+      labelXmlLines.push('          </XForm>');
+      labelXmlLines.push('          <Fill>');
+      labelXmlLines.push('            <FillForegnd>#FFFFFF</FillForegnd>'); // Explicit hex white
+      labelXmlLines.push('            <FillPattern>1</FillPattern>');
+      labelXmlLines.push('          </Fill>');
+      labelXmlLines.push('          <Line>');
+      labelXmlLines.push('            <LinePattern>0</LinePattern>'); // No border around label
+      labelXmlLines.push('          </Line>');
+      labelXmlLines.push('          <TextBlock>');
+      labelXmlLines.push('            <LeftMargin Unit="IN">0.04</LeftMargin>');
+      labelXmlLines.push('            <RightMargin Unit="IN">0.04</RightMargin>');
+      labelXmlLines.push('            <TopMargin Unit="IN">0.02</TopMargin>');
+      labelXmlLines.push('            <BottomMargin Unit="IN">0.02</BottomMargin>');
+      labelXmlLines.push('            <VerticalAlign>1</VerticalAlign>');
+      labelXmlLines.push('            <TextBkgnd>0</TextBkgnd>');
+      labelXmlLines.push('          </TextBlock>');
+      labelXmlLines.push(`          <Text><cp IX="0"/><pp IX="0"/>${escapeXml(edgeLabel)}</Text>`);
+      labelXmlLines.push('          <Paragraph IX="0">');
+      labelXmlLines.push('            <HorzAlign>1</HorzAlign>');
+      labelXmlLines.push('          </Paragraph>');
+      labelXmlLines.push('          <Character IX="0">');
+      labelXmlLines.push('            <Font>1</Font>');
+      labelXmlLines.push('            <Color>#0F172A</Color>');
+      labelXmlLines.push('            <Size Unit="PT">7.5</Size>');
+      labelXmlLines.push('            <Style>1</Style>');
+      labelXmlLines.push('          </Character>');
+      labelXmlLines.push('        </Shape>');
+    }
 
     // Glue connections to boundary connection points:
     // ToPart = 100 + connection_point_index (Row 0 / Top: 100, Row 1 / Bottom: 101, Row 2 / Left: 102, Row 3 / Right: 103)
@@ -489,29 +516,39 @@ export function generateVisioVdx(
     const escapedTitle = escapeXml(title);
     const escapedSubtitle = escapeXml(subtitle);
 
+    // Padding in inches (5 pt ≈ 0.0694 in, 4 pt ≈ 0.0556 in)
+    const padX = 0.07;
+    const padY = 0.05;
+    const txtWidthIn = Math.max(0.5, wIn - padX * 2);
+    const txtHeightIn = Math.max(0.4, hIn - padY * 2);
+
     nodeXmlLines.push(`        <!-- Node: ${escapeXml(node.id)} -->`);
     nodeXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" LineStyle="3" FillStyle="3" TextStyle="3">`);
     nodeXmlLines.push('          <XForm>');
     nodeXmlLines.push(`            <PinX>${cx.toFixed(4)}</PinX>`);
     nodeXmlLines.push(`            <PinY>${cy.toFixed(4)}</PinY>`);
     nodeXmlLines.push(`            <Width>${wIn.toFixed(4)}</Width>`);
-    // Static evaluated height so third-party viewers never fail or collapse text
     nodeXmlLines.push(`            <Height>${hIn.toFixed(4)}</Height>`);
     nodeXmlLines.push(`            <LocPinX F="Width*0.5">${(wIn / 2).toFixed(4)}</LocPinX>`);
     nodeXmlLines.push(`            <LocPinY F="Height*0.5">${(hIn / 2).toFixed(4)}</LocPinY>`);
     nodeXmlLines.push('            <Angle>0</Angle>');
     nodeXmlLines.push('          </XForm>');
-    // Explicit TxtXForm locks text block width to shape width, preventing single-character column collapse
+    // Inset TxtXForm ensures text frame is physically inset inside shape borders across all viewers
     nodeXmlLines.push('          <TxtXForm>');
     nodeXmlLines.push(`            <TxtPinX F="Width*0.5">${(wIn / 2).toFixed(4)}</TxtPinX>`);
     nodeXmlLines.push(`            <TxtPinY F="Height*0.5">${(hIn / 2).toFixed(4)}</TxtPinY>`);
-    nodeXmlLines.push(`            <TxtWidth F="Width*1">${wIn.toFixed(4)}</TxtWidth>`);
-    nodeXmlLines.push(`            <TxtHeight F="Height*1">${hIn.toFixed(4)}</TxtHeight>`);
-    nodeXmlLines.push(`            <TxtLocPinX F="TxtWidth*0.5">${(wIn / 2).toFixed(4)}</TxtLocPinX>`);
-    nodeXmlLines.push(`            <TxtLocPinY F="TxtHeight*0.5">${(hIn / 2).toFixed(4)}</TxtLocPinY>`);
+    nodeXmlLines.push(`            <TxtWidth>${txtWidthIn.toFixed(4)}</TxtWidth>`);
+    nodeXmlLines.push(`            <TxtHeight>${txtHeightIn.toFixed(4)}</TxtHeight>`);
+    nodeXmlLines.push(`            <TxtLocPinX F="TxtWidth*0.5">${(txtWidthIn / 2).toFixed(4)}</TxtLocPinX>`);
+    nodeXmlLines.push(`            <TxtLocPinY F="TxtHeight*0.5">${(txtHeightIn / 2).toFixed(4)}</TxtLocPinY>`);
     nodeXmlLines.push('            <TxtAngle>0</TxtAngle>');
     nodeXmlLines.push('          </TxtXForm>');
     nodeXmlLines.push('          <TextBlock>');
+    // Specified in INCHES with small decimal values so even viewers that ignore Unit="IN" read ~0.06 in, never 5 in
+    nodeXmlLines.push('            <LeftMargin Unit="IN">0.0694</LeftMargin>');
+    nodeXmlLines.push('            <RightMargin Unit="IN">0.0694</RightMargin>');
+    nodeXmlLines.push('            <TopMargin Unit="IN">0.0556</TopMargin>');
+    nodeXmlLines.push('            <BottomMargin Unit="IN">0.0556</BottomMargin>');
     nodeXmlLines.push('            <VerticalAlign>1</VerticalAlign>');
     nodeXmlLines.push('            <TextBkgnd>0</TextBkgnd>');
     nodeXmlLines.push('          </TextBlock>');
@@ -527,7 +564,6 @@ export function generateVisioVdx(
     nodeXmlLines.push('          </Fill>');
 
     // Single-escaped line break: &#x0A; is emitted directly in the XML text node
-    // without running escapeXml on the entity itself, preventing &amp;#x0A;
     if (escapedSubtitle) {
       nodeXmlLines.push(`          <Text><cp IX="0"/><pp IX="0"/>${escapedTitle}&#x0A;<cp IX="1"/>${escapedSubtitle}</Text>`);
       nodeXmlLines.push('          <Paragraph IX="0">');
@@ -697,7 +733,7 @@ export function generateVisioVdx(
       </Fill>
       <TextBlock>
         <VerticalAlign>1</VerticalAlign>
-        <TextBkgnd>1</TextBkgnd>
+        <TextBkgnd>0</TextBkgnd>
       </TextBlock>
       <Character>
         <Font>1</Font>
@@ -766,6 +802,7 @@ export function generateVisioVdx(
       </PageSheet>
       <Shapes>
 ${connectorXmlLines.join('\n')}
+${labelXmlLines.join('\n')}
 ${nodeXmlLines.join('\n')}
       </Shapes>
       <Connects>

@@ -109,7 +109,7 @@ export const TEMPLATES: VxmlTemplate[] = [
       {
         id: 'goodbye',
         type: 'vxml-disconnect',
-        position: { x: 820, y: 300 },
+        position: { x: 820, y: 260 },
         data: {
           label: 'Disconnect',
           dialogId: 'goodbye',
