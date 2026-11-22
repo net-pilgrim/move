@@ -403,8 +403,8 @@ export function generateVisioVdx(
     const angleRad = Math.atan2(dy, dx);
 
     const edgeLabel = edge.label ? String(edge.label) : (edge.sourceHandle || '');
-    const labelWidthIn = Math.max(0.6, edgeLabel.length * 0.075);
-    const labelHeightIn = 0.25;
+    const labelWidthIn = Math.max(1.0, edgeLabel.length * 0.08 + 0.3);
+    const labelHeightIn = 0.3;
 
     connectorXmlLines.push(`        <!-- 1-D Dynamic Connector: ${escapeXml(edge.id)} (${edge.source} -> ${edge.target}) -->`);
     connectorXmlLines.push(`        <Shape ID="${shapeId}" Type="Shape" Master="1" LineStyle="4" TextStyle="4">`);
@@ -435,10 +435,6 @@ export function generateVisioVdx(
     connectorXmlLines.push('          </Line>');
     if (edgeLabel) {
       connectorXmlLines.push('          <TextBlock>');
-      connectorXmlLines.push('            <LeftMargin Unit="PT">2</LeftMargin>');
-      connectorXmlLines.push('            <RightMargin Unit="PT">2</RightMargin>');
-      connectorXmlLines.push('            <TopMargin Unit="PT">2</TopMargin>');
-      connectorXmlLines.push('            <BottomMargin Unit="PT">2</BottomMargin>');
       connectorXmlLines.push('            <VerticalAlign>1</VerticalAlign>');
       connectorXmlLines.push('            <TextBkgnd>1</TextBkgnd>'); // Solid background so connector doesn't strike through text
       connectorXmlLines.push('          </TextBlock>');
@@ -516,10 +512,6 @@ export function generateVisioVdx(
     nodeXmlLines.push('            <TxtAngle>0</TxtAngle>');
     nodeXmlLines.push('          </TxtXForm>');
     nodeXmlLines.push('          <TextBlock>');
-    nodeXmlLines.push('            <LeftMargin Unit="PT">5</LeftMargin>');
-    nodeXmlLines.push('            <RightMargin Unit="PT">5</RightMargin>');
-    nodeXmlLines.push('            <TopMargin Unit="PT">5</TopMargin>');
-    nodeXmlLines.push('            <BottomMargin Unit="PT">5</BottomMargin>');
     nodeXmlLines.push('            <VerticalAlign>1</VerticalAlign>');
     nodeXmlLines.push('            <TextBkgnd>0</TextBkgnd>');
     nodeXmlLines.push('          </TextBlock>');
@@ -537,14 +529,9 @@ export function generateVisioVdx(
     // Single-escaped line break: &#x0A; is emitted directly in the XML text node
     // without running escapeXml on the entity itself, preventing &amp;#x0A;
     if (escapedSubtitle) {
-      nodeXmlLines.push(`          <Text><cp IX="0"/><pp IX="0"/>${escapedTitle}&#x0A;<cp IX="1"/><pp IX="1"/>${escapedSubtitle}</Text>`);
+      nodeXmlLines.push(`          <Text><cp IX="0"/><pp IX="0"/>${escapedTitle}&#x0A;<cp IX="1"/>${escapedSubtitle}</Text>`);
       nodeXmlLines.push('          <Paragraph IX="0">');
       nodeXmlLines.push('            <HorzAlign>1</HorzAlign>');
-      nodeXmlLines.push('            <SpAfter Unit="PT">2</SpAfter>');
-      nodeXmlLines.push('          </Paragraph>');
-      nodeXmlLines.push('          <Paragraph IX="1">');
-      nodeXmlLines.push('            <HorzAlign>1</HorzAlign>');
-      nodeXmlLines.push('            <SpLine Unit="PT">-10</SpLine>');
       nodeXmlLines.push('          </Paragraph>');
       nodeXmlLines.push('          <Character IX="0">');
       nodeXmlLines.push('            <Font>1</Font>');

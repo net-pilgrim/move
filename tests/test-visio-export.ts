@@ -133,7 +133,15 @@ for (const nodeShape of pageNodeShapes) {
   const txtWidthVal = parseFloat(txtWidth.textContent || '0');
   assert.ok(txtWidthVal >= 1.5, `TxtWidth (${txtWidthVal}) must be >= 1.5 inches to ensure full multiline text wrapping`);
 }
-console.log('✅ Defect 4 verified: Height has no brittle formulas; TxtXForm specifies full width');
+
+// Defect 4b: No Unit="PT" margin or spacing elements that viewers misinterpret as inches
+assert.strictEqual(doc.getElementsByTagName('LeftMargin').length, 0, 'No explicit LeftMargin elements (avoids unit="PT" parsed as inches)');
+assert.strictEqual(doc.getElementsByTagName('RightMargin').length, 0, 'No explicit RightMargin elements');
+assert.strictEqual(doc.getElementsByTagName('TopMargin').length, 0, 'No explicit TopMargin elements');
+assert.strictEqual(doc.getElementsByTagName('BottomMargin').length, 0, 'No explicit BottomMargin elements');
+assert.strictEqual(doc.getElementsByTagName('SpAfter').length, 0, 'No explicit SpAfter elements');
+assert.strictEqual(doc.getElementsByTagName('SpLine').length, 0, 'No explicit SpLine elements');
+console.log('✅ Defect 4 verified: Height has no brittle formulas; TxtXForm specifies full width; no margin elements that misinterpret as inches');
 
 // Defect 5: Medium standard filled arrowhead (EndArrow=4, EndArrowSize=2)
 for (const conn of pageConnectorShapes) {
